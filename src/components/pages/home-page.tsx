@@ -1,26 +1,17 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, MapPinned } from "lucide-react";
 import type { Tab } from "@/app/page";
 import type {
   Issue,
-  IssueStatus,
   FlashAlert,
   CommunityPulse,
   CityMood,
   PredictiveInsight,
-  TimelineEvent,
 } from "@/lib/types";
-import {
-  mockPulse,
-  mockFeed,
-  mockAlerts,
-  mockIssues,
-  mockCityMood,
-  mockInsights,
-} from "@/lib/mock-data";
+import { generateFeedFromIssues } from "@/lib/demo-seeder";
 import CommunityPulseCard from "@/components/community-pulse-card";
 import LiveFeed from "@/components/live-feed";
 import FlashAlerts from "@/components/flash-alerts";
@@ -33,6 +24,13 @@ interface HomePageProps {
   onNavigate: (tab: Tab) => void;
   selectedIssue: Issue | null;
   onSelectIssue: (issue: Issue) => void;
+  issues: Issue[];
+  pulse: CommunityPulse;
+  alerts: FlashAlert[];
+  mood: CityMood;
+  insights: PredictiveInsight[];
+  onUpdateIssues?: React.Dispatch<React.SetStateAction<Issue[]>>;
+  onVerifyIssue?: (issue: Issue, action: "still_exists" | "resolved") => void;
 }
 
 const stagger = {
@@ -52,46 +50,22 @@ const fadeUp = {
   },
 };
 
-export default function HomePage({ onNavigate, selectedIssue, onSelectIssue }: HomePageProps) {
-  const [pulse, setPulse] = useState<CommunityPulse>(mockPulse);
-  const [alerts, setAlerts] = useState<FlashAlert[]>(mockAlerts);
-  const [issues, setIssues] = useState<Issue[]>(mockIssues);
-  const [mood, setMood] = useState<CityMood>(mockCityMood);
-  const [insights, setInsights] = useState<PredictiveInsight[]>(mockInsights);
+export default function HomePage({
+  onNavigate,
+  selectedIssue,
+  onSelectIssue,
+  issues,
+  pulse,
+  alerts,
+  mood,
+  insights,
+  onVerifyIssue,
+}: HomePageProps) {
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const issuesRes = await fetch("/api/issues");
-        if (!issuesRes.ok) throw new Error("Issues fetch failed");
-
-        const realIssues: Issue[] = await issuesRes.json();
-        if (realIssues && realIssues.length > 0) {
-          setIssues(realIssues);
-
-          const pulseRes = await fetch("/api/pulse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ issues: realIssues }),
-          });
-
-          if (pulseRes.ok) {
-            const data = await pulseRes.json();
-            if (data.pulse) setPulse(data.pulse);
-            if (data.alerts) setAlerts(data.alerts);
-            if (data.summary) setMood({ summary: data.summary, generated_at: new Date().toISOString() });
-            if (data.insights) setInsights(data.insights);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch real data, fallback to mock data:", err);
-      }
-    }
-
-    loadData();
-  }, []);
+  // Generate live feed dynamically from seeded issues list to maintain absolute consistency
+  const feed = useMemo(() => generateFeedFromIssues(issues), [issues]);
 
   const focusMapIssue = (issue: Issue) => {
     setFocusedIssueId(issue.id);
@@ -99,46 +73,9 @@ export default function HomePage({ onNavigate, selectedIssue, onSelectIssue }: H
     mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const verifyIssue = async (issue: Issue, action: "still_exists" | "resolved") => {
-    const nextStatus: IssueStatus = action === "resolved" ? "resolved" : "verified";
-    const nextEventType: TimelineEvent["type"] =
-      action === "resolved" ? "resolved" : "verified";
-    const nextIssues: Issue[] = issues.map((item) =>
-      item.id === issue.id
-        ? {
-            ...item,
-            status: nextStatus,
-            verification_count: item.verification_count + 1,
-            confidence: Math.min(99, item.confidence + 2),
-            updated_at: new Date().toISOString(),
-            timeline: [
-              ...item.timeline,
-              {
-                id: `${item.id}-${action}-${Date.now()}`,
-                type: nextEventType,
-                description:
-                  action === "resolved"
-                    ? "Marked resolved from the map"
-                    : "Verified as still existing from the map",
-                timestamp: new Date().toISOString(),
-              },
-            ],
-          }
-        : item
-    );
-
-    setIssues(nextIssues);
-    const updatedIssue = nextIssues.find((item) => item.id === issue.id);
-    if (updatedIssue && selectedIssue?.id === issue.id) onSelectIssue(updatedIssue);
-
-    try {
-      await fetch("/api/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ issue_id: issue.id, action }),
-      });
-    } catch (err) {
-      console.warn("Verification saved locally only:", err);
+  const handleVerify = async (issue: Issue, action: "still_exists" | "resolved") => {
+    if (onVerifyIssue) {
+      onVerifyIssue(issue, action);
     }
   };
 
@@ -149,7 +86,7 @@ export default function HomePage({ onNavigate, selectedIssue, onSelectIssue }: H
       animate="visible"
       className="safe-bottom"
     >
-      <LiveFeed feed={mockFeed} />
+      <LiveFeed feed={feed} />
 
       <div className="px-4 space-y-4 pt-3">
         <motion.div ref={mapSectionRef} variants={fadeUp} className="scroll-mt-20">
@@ -173,7 +110,7 @@ export default function HomePage({ onNavigate, selectedIssue, onSelectIssue }: H
           <NearbyIssues
             issues={issues}
             onSelectIssue={focusMapIssue}
-            onVerifyIssue={verifyIssue}
+            onVerifyIssue={handleVerify}
           />
         </motion.div>
 

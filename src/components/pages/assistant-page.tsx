@@ -9,6 +9,7 @@ import {
   mockCityMood,
   mockInsights,
 } from "@/lib/mock-data";
+import type { Issue, CommunityPulse, CityMood, PredictiveInsight } from "@/lib/types";
 
 interface Message {
   id: string;
@@ -18,6 +19,10 @@ interface Message {
 
 interface AssistantPageProps {
   onClose?: () => void;
+  issues?: Issue[];
+  pulse?: CommunityPulse;
+  cityMood?: CityMood;
+  insights?: PredictiveInsight[];
 }
 
 const suggestions = [
@@ -27,7 +32,13 @@ const suggestions = [
   "What gets resolved fastest?",
 ];
 
-export default function AssistantPage({ onClose }: AssistantPageProps) {
+export default function AssistantPage({
+  onClose,
+  issues,
+  pulse,
+  cityMood,
+  insights,
+}: AssistantPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,8 +75,8 @@ export default function AssistantPage({ onClose }: AssistantPageProps) {
         body: JSON.stringify({
           question: text.trim(),
           context: {
-            pulse: mockPulse,
-            issues: mockIssues.map((i) => ({
+            pulse: pulse || mockPulse,
+            issues: (issues || mockIssues).map((i) => ({
               title: i.title,
               category: i.category,
               severity: i.severity,
@@ -74,8 +85,8 @@ export default function AssistantPage({ onClose }: AssistantPageProps) {
               confidence: i.confidence,
               address: i.address,
             })),
-            cityMood: mockCityMood,
-            insights: mockInsights,
+            cityMood: cityMood || mockCityMood,
+            insights: insights || mockInsights,
           },
         }),
       });

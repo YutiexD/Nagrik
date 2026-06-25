@@ -40,6 +40,47 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased dark`}>
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes leaflet-ping {
+                0% { transform: scale(1); opacity: 0.4; }
+                100% { transform: scale(2.5); opacity: 0; }
+              }
+              .leaflet-container {
+                background: #1a1a2e !important;
+                font-family: inherit;
+              }
+              .leaflet-popup-content-wrapper {
+                background: #1c1c2e !important;
+                color: #e0e0e0 !important;
+                border-radius: 12px !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+              }
+              .leaflet-popup-tip {
+                background: #1c1c2e !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                box-shadow: none !important;
+              }
+              .leaflet-popup-close-button {
+                color: #888 !important;
+              }
+              .custom-marker, .user-location-marker, .search-marker {
+                background: transparent !important;
+                border: none !important;
+              }
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Camera,
@@ -15,9 +15,11 @@ import {
   X,
 } from "lucide-react";
 import type { Tab } from "@/app/page";
+import type { Issue } from "@/lib/types";
 
 interface Props {
   onNavigate: (tab: Tab) => void;
+  onAddIssue?: (issue: Issue) => void;
 }
 
 type InputMode = "image" | "video" | "voice" | "text";
@@ -50,10 +52,10 @@ function fileToBase64(file: File): Promise<string> {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
-  }, []);
+  });
 }
 
-export default function ReportPage({ onNavigate }: Props) {
+export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   const [mode, setMode] = useState<InputMode>("image");
   const [step, setStep] = useState<Step>("input");
   const [textInput, setTextInput] = useState("");
@@ -74,32 +76,58 @@ export default function ReportPage({ onNavigate }: Props) {
   const [locationStatus, setLocationStatus] = useState("Requesting location permission...");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-            address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`,
-          });
-          setLocationStatus(`GPS detected within ${Math.round(pos.coords.accuracy)}m`);
-        },
-        () => {
-          setLocation({ lat: 28.6139, lng: 77.209, address: "Location not detected — enter manually" });
-        }
-      );
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    { id: string; name: string; address: string; location: { lat: number; lng: number } }[]
+  >([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reverse geocode coords to a human-readable address
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`/api/places?q=${encodeURIComponent(`${lat},${lng}}`)}&reverse=1`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.results?.[0]?.address || null;
+    } catch {
+      return null;
     }
   }, []);
 
   useEffect(() => {
-    if (!location?.address.toLowerCase().includes("not detected")) return;
+    if (!navigator.geolocation) {
+      setLocationMode("manual");
+      setLocationStatus("Location not supported. Enter manually.");
+      return;
+    }
 
-    setLocation(null);
-    setLocationMode("manual");
-    setLocationStatus("Could not detect GPS. Enter location manually.");
-  }, [location]);
+    setLocationStatus("Detecting your location...");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const coords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`,
+        };
+        setLocation(coords);
+        setLocationStatus(`GPS detected within ${Math.round(pos.coords.accuracy)}m`);
+
+        // Try to get a readable address
+        const addr = await reverseGeocode(coords.lat, coords.lng);
+        if (addr) {
+          setLocation((prev) => prev ? { ...prev, address: addr } : prev);
+          setLocationStatus(`GPS: ${addr}`);
+        }
+      },
+      () => {
+        setLocation(null);
+        setLocationMode("manual");
+        setLocationStatus("Could not detect GPS. Enter location manually.");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }, [reverseGeocode]);
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
@@ -108,16 +136,23 @@ export default function ReportPage({ onNavigate }: Props) {
       return;
     }
 
-    setLocationStatus("Requesting location permission...");
+    setLocationStatus("Detecting your location...");
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({
+      async (pos) => {
+        const coords = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           address: `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`,
-        });
+        };
+        setLocation(coords);
         setLocationStatus(`GPS detected within ${Math.round(pos.coords.accuracy)}m`);
+
+        const addr = await reverseGeocode(coords.lat, coords.lng);
+        if (addr) {
+          setLocation((prev) => prev ? { ...prev, address: addr } : prev);
+          setLocationStatus(`GPS: ${addr}`);
+        }
       },
       () => {
         setLocation(null);
@@ -128,6 +163,24 @@ export default function ReportPage({ onNavigate }: Props) {
     );
   };
 
+  // Debounced address search for suggestions
+  const searchAddress = useCallback((query: string) => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!query.trim() || query.trim().length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places?q=${encodeURIComponent(query)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setAddressSuggestions(data.results || []);
+        setShowSuggestions(true);
+      } catch { /* ignore */ }
+    }, 400);
+  }, []);
+
   const geocodeManualLocation = async () => {
     const trimmedAddress = manualAddress.trim();
     if (!trimmedAddress) {
@@ -135,44 +188,35 @@ export default function ReportPage({ onNavigate }: Props) {
       return null;
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      setError("Add latitude and longitude, or configure the Google Maps key to geocode addresses.");
+    try {
+      const res = await fetch(`/api/places?q=${encodeURIComponent(trimmedAddress)}`);
+      const data = await res.json();
+      const result = data.results?.[0];
+
+      if (!result) {
+        setError("Could not find that address. Try a clearer landmark or add lat/lng.");
+        return null;
+      }
+
+      const nextLocation = {
+        lat: result.location.lat,
+        lng: result.location.lng,
+        address: result.address,
+      };
+
+      setLocation(nextLocation);
+      setManualAddress(result.address);
+      setManualLat(String(nextLocation.lat));
+      setManualLng(String(nextLocation.lng));
+      setLocationStatus("Manual address matched.");
+      setError(null);
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return nextLocation;
+    } catch {
+      setError("Search failed. Try adding lat/lng manually.");
       return null;
     }
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-        `${trimmedAddress}, India`
-      )}&components=country:IN&key=${apiKey}`
-    );
-    const data: {
-      status: string;
-      results?: Array<{
-        formatted_address: string;
-        geometry: { location: { lat: number; lng: number } };
-      }>;
-    } = await response.json();
-    const result = data.results?.[0];
-
-    if (!response.ok || data.status !== "OK" || !result) {
-      setError("Could not find that Indian address. Try a clearer landmark or add lat/lng.");
-      return null;
-    }
-
-    const nextLocation = {
-      lat: result.geometry.location.lat,
-      lng: result.geometry.location.lng,
-      address: result.formatted_address,
-    };
-
-    setLocation(nextLocation);
-    setManualAddress(result.formatted_address);
-    setManualLat(String(nextLocation.lat));
-    setManualLng(String(nextLocation.lng));
-    setLocationStatus("Manual address matched on Google Maps.");
-    setError(null);
-    return nextLocation;
   };
 
   const getReportLocation = async () => {
@@ -267,8 +311,9 @@ export default function ReportPage({ onNavigate }: Props) {
     const reportLocation = await getReportLocation();
     if (!reportLocation) return;
 
+    let newIssue: Issue | null = null;
     try {
-      await fetch("/api/issues", {
+      const res = await fetch("/api/issues", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -278,8 +323,45 @@ export default function ReportPage({ onNavigate }: Props) {
           address: reportLocation.address,
         }),
       });
-    } catch {
-      // Silently handle — mock data still works
+      if (res.ok) {
+        newIssue = await res.json();
+      }
+    } catch (err) {
+      console.warn("API submission failed, falling back to local creation:", err);
+    }
+
+    if (!newIssue) {
+      newIssue = {
+        id: "mock-" + Math.random().toString(36).slice(2, 11),
+        title: analysis.title,
+        description: analysis.description,
+        category: (analysis.category || "other") as any,
+        severity: (analysis.severity || "medium") as any,
+        status: "reported",
+        priority_score: analysis.priority_score || 50,
+        confidence: 85,
+        affected_citizens: 1,
+        verification_count: 0,
+        latitude: reportLocation.lat,
+        longitude: reportLocation.lng,
+        address: reportLocation.address,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        root_cause: analysis.root_cause || "Pending AI analysis",
+        root_cause_confidence: analysis.root_cause_confidence || 70,
+        timeline: [
+          {
+            id: `t-mock-${Date.now()}`,
+            type: "reported",
+            description: "Issue first reported by citizen",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+
+    if (onAddIssue) {
+      onAddIssue(newIssue);
     }
 
     setStep("input");
@@ -494,13 +576,44 @@ export default function ReportPage({ onNavigate }: Props) {
 
                 {locationMode === "manual" && (
                   <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={manualAddress}
-                      onChange={(e) => setManualAddress(e.target.value)}
-                      placeholder="Address, landmark, city"
-                      className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={manualAddress}
+                        onChange={(e) => {
+                          setManualAddress(e.target.value);
+                          searchAddress(e.target.value);
+                        }}
+                        onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        placeholder="Search address, landmark, or city..."
+                        className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      {showSuggestions && addressSuggestions.length > 0 && (
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-40 overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
+                          {addressSuggestions.map((s) => (
+                            <button
+                              key={s.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setManualAddress(s.address);
+                                setManualLat(String(s.location.lat));
+                                setManualLng(String(s.location.lng));
+                                setLocation({ lat: s.location.lat, lng: s.location.lng, address: s.address });
+                                setLocationStatus(`Manual: ${s.name}`);
+                                setShowSuggestions(false);
+                                setAddressSuggestions([]);
+                                setError(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-primary/10 transition-colors"
+                            >
+                              <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                              <span className="min-w-0 flex-1 truncate">{s.address}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="number"

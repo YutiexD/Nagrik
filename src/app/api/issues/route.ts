@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!supabase) {
       // Offline/Mock mode submission success
       return Response.json({
-        id: "mock-" + Math.random().toString(36).substr(2, 9),
+        id: "mock-" + Math.random().toString(36).slice(2, 11),
         title: body.title,
         description: body.description,
         category: body.category,
@@ -58,11 +58,23 @@ export async function POST(request: NextRequest) {
         priority_score: body.priority_score || 50,
         confidence: 85,
         affected_citizens: 1,
+        verification_count: 0,
         latitude: body.latitude,
         longitude: body.longitude,
         address: body.address || "",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        root_cause: body.root_cause || "Pending AI analysis",
+        root_cause_confidence: body.root_cause_confidence || 70,
+        similar_cases: 0,
+        timeline: [
+          {
+            id: `t-mock-${Date.now()}`,
+            type: "reported",
+            description: "Issue first reported by citizen",
+            timestamp: new Date().toISOString(),
+          },
+        ],
       }, { status: 201 });
     }
 
