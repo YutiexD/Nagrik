@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   Loader2,
   X,
+  Upload,
+  Square,
 } from "lucide-react";
 import type { Tab } from "@/app/page";
 import type { Issue } from "@/lib/types";
@@ -22,7 +24,7 @@ interface Props {
   onAddIssue?: (issue: Issue) => void;
 }
 
-type InputMode = "image" | "video" | "voice" | "text";
+type InputMode = "image" | "video" | "record" | "audio_upload" | "text";
 type Step = "input" | "processing" | "review";
 type LocationMode = "gps" | "manual";
 
@@ -39,7 +41,8 @@ interface AnalysisResult {
 const inputModes: { id: InputMode; icon: typeof Camera; label: string }[] = [
   { id: "image", icon: Camera, label: "Image" },
   { id: "video", icon: Video, label: "Video" },
-  { id: "voice", icon: Mic, label: "Voice" },
+  { id: "record", icon: Mic, label: "Record" },
+  { id: "audio_upload", icon: Upload, label: "Audio" },
   { id: "text", icon: FileText, label: "Text" },
 ];
 
@@ -75,6 +78,60 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   const [manualLng, setManualLng] = useState("");
   const [locationStatus, setLocationStatus] = useState("Requesting location permission...");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
+      recordingChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType });
+        const ext = recorder.mimeType.includes('webm') ? 'webm' : 'm4a';
+        const file = new File([blob], `recording.${ext}`, { type: recorder.mimeType });
+        setSelectedFile(file);
+        setPreview(URL.createObjectURL(blob));
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch {
+      setError("Microphone access denied. Please allow microphone permission.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   const [addressSuggestions, setAddressSuggestions] = useState<
     { id: string; name: string; address: string; location: { lat: number; lng: number } }[]
@@ -258,6 +315,12 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
 
     try {
       const payload: Record<string, string> = {};
+      const location = await getReportLocation();
+      if (location) {
+        payload.lat = String(location.lat);
+        payload.lng = String(location.lng);
+        payload.address = location.address;
+      }
 
       if (selectedFile) {
         const base64 = await fileToBase64(selectedFile);
@@ -267,7 +330,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
         } else if (mode === "video") {
           payload.videoBase64 = base64;
           payload.videoType = selectedFile.type;
-        } else if (mode === "voice") {
+        } else if (mode === "record" || mode === "audio_upload") {
           payload.audioBase64 = base64;
           payload.audioType = selectedFile.type;
         }
@@ -410,22 +473,23 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               exit={{ opacity: 0, y: -8 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 {inputModes.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => {
+                      if (isRecording) stopRecording();
                       setMode(m.id);
                       clearFile();
                     }}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all ${
+                    className={`flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all ${
                       mode === m.id
                         ? "bg-primary/10 text-primary border border-primary/20"
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    <m.icon className="w-5 h-5" />
-                    <span className="text-[11px] font-medium">{m.label}</span>
+                    <m.icon className="w-4 h-4" />
+                    <span className="text-[10px] font-medium">{m.label}</span>
                   </button>
                 ))}
               </div>
@@ -439,7 +503,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                     ? "image/*"
                     : mode === "video"
                     ? "video/*"
-                    : mode === "voice"
+                    : mode === "audio_upload"
                     ? "audio/*"
                     : undefined
                 }
@@ -471,20 +535,65 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                 </button>
               )}
 
-              {mode === "voice" && !preview && (
+              {mode === "record" && !preview && (
+                <div className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-4">
+                  {isRecording ? (
+                    <>
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity }}
+                        className="w-20 h-20 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center"
+                      >
+                        <div className="w-4 h-4 rounded-sm bg-red-500 animate-pulse" />
+                      </motion.div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-sm font-mono font-semibold text-red-400">
+                          {Math.floor(recordingSeconds / 60).toString().padStart(2, '0')}:{(recordingSeconds % 60).toString().padStart(2, '0')}
+                        </span>
+                      </div>
+                      {/* Waveform bars */}
+                      <div className="flex items-end gap-0.5 h-8">
+                        {Array.from({ length: 24 }).map((_, i) => (
+                          <motion.div
+                            key={i}
+                            className="w-1 rounded-full bg-red-400/70"
+                            animate={{ height: [4, 8 + Math.random() * 24, 4] }}
+                            transition={{ duration: 0.4 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.05 }}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={stopRecording}
+                        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 text-red-400 font-semibold text-sm border border-red-500/20"
+                      >
+                        <Square className="w-4 h-4" />
+                        Stop Recording
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={startRecording} className="flex flex-col items-center gap-3">
+                      <motion.div
+                        animate={{ scale: [1, 1.08, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center"
+                      >
+                        <Mic className="w-9 h-9 text-primary" />
+                      </motion.div>
+                      <p className="text-sm text-muted-foreground">Tap to start recording</p>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {mode === "audio_upload" && !preview && (
                 <button
                   onClick={() => fileRef.current?.click()}
                   className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3"
                 >
-                  <motion.div
-                    animate={{ scale: [1, 1.15, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center"
-                  >
-                    <Mic className="w-8 h-8 text-primary" />
-                  </motion.div>
+                  <Upload className="w-10 h-10 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">
-                    Tap to record or upload audio
+                    Upload an existing audio file
                   </p>
                 </button>
               )}
@@ -515,7 +624,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                       className="w-full h-48 object-cover"
                     />
                   )}
-                  {mode === "voice" && (
+                  {(mode === "record" || mode === "audio_upload") && (
                     <div className="p-4">
                       <audio src={preview} controls className="w-full" />
                     </div>

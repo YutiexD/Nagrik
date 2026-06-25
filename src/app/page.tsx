@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Home, Plus, User, Loader2 } from "lucide-react";
+import { Bot, Home, Plus, User } from "lucide-react";
 import HomePage from "@/components/pages/home-page";
 import ReportPage from "@/components/pages/report-page";
 import AssistantPage from "@/components/pages/assistant-page";
@@ -20,22 +20,59 @@ const topTabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "profile", label: "Profile", icon: User },
 ];
 
+// Default fallback location — Bengaluru
+const DEFAULT_LOC = { lat: 12.9716, lng: 77.5946 };
+const DEFAULT_CITY = "Bengaluru";
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
-  // Central Seeding & Consistency States
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [pulse, setPulse] = useState<CommunityPulse | null>(null);
-  const [alerts, setAlerts] = useState<FlashAlert[]>([]);
-  const [mood, setMood] = useState<CityMood | null>(null);
-  const [insights, setInsights] = useState<PredictiveInsight[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [cityName, setCityName] = useState("Your Location");
+  // Seed default issues immediately so the app is never empty
+  const [issues, setIssues] = useState<Issue[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nagrik_seeded_issues");
+      if (saved) return JSON.parse(saved);
+    }
+    return generateSeededIssues(DEFAULT_LOC.lat, DEFAULT_LOC.lng, DEFAULT_CITY);
+  });
 
-  // Helper to fetch/analyze pulse data via Gemini using issues context
+  const [pulse, setPulse] = useState<CommunityPulse>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nagrik_seeded_pulse");
+      if (saved) return JSON.parse(saved);
+    }
+    return mockPulse;
+  });
+
+  const [alerts, setAlerts] = useState<FlashAlert[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nagrik_seeded_alerts");
+      if (saved) return JSON.parse(saved);
+    }
+    return mockAlerts;
+  });
+
+  const [mood, setMood] = useState<CityMood>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nagrik_seeded_mood");
+      if (saved) return JSON.parse(saved);
+    }
+    return mockCityMood;
+  });
+
+  const [insights, setInsights] = useState<PredictiveInsight[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nagrik_seeded_insights");
+      if (saved) return JSON.parse(saved);
+    }
+    return mockInsights;
+  });
+
+  const locationUpgraded = useRef(false);
+
+  // Helper to fetch/analyze pulse data via Gemini
   const analyzeAndStorePulse = useCallback(async (issueList: Issue[]) => {
     try {
       const res = await fetch("/api/pulse", {
@@ -62,107 +99,75 @@ export default function App() {
           setInsights(data.insights);
           localStorage.setItem("nagrik_seeded_insights", JSON.stringify(data.insights));
         }
-      } else {
-        throw new Error("Pulse status not OK");
       }
     } catch (err) {
       console.warn("Could not call pulse API, using static fallbacks:", err);
-      setPulse(mockPulse);
-      setAlerts(mockAlerts);
-      setMood(mockCityMood);
-      setInsights(mockInsights);
     }
   }, []);
 
-  // Geolocation and seeding on mount
+  // On mount: save default issues if first time, then try upgrading to real location in background
   useEffect(() => {
-    async function initSeeding() {
-      if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-      const savedIssues = localStorage.getItem("nagrik_seeded_issues");
-      const savedPulse = localStorage.getItem("nagrik_seeded_pulse");
-      const savedAlerts = localStorage.getItem("nagrik_seeded_alerts");
-      const savedMood = localStorage.getItem("nagrik_seeded_mood");
-      const savedInsights = localStorage.getItem("nagrik_seeded_insights");
-      const savedLoc = localStorage.getItem("nagrik_center_location");
-      const savedCity = localStorage.getItem("nagrik_city_name");
+    const hadSaved = localStorage.getItem("nagrik_seeded_issues");
 
-      if (savedIssues) {
-        setIssues(JSON.parse(savedIssues));
-        if (savedPulse) setPulse(JSON.parse(savedPulse));
-        if (savedAlerts) setAlerts(JSON.parse(savedAlerts));
-        if (savedMood) setMood(JSON.parse(savedMood));
-        if (savedInsights) setInsights(JSON.parse(savedInsights));
-        if (savedLoc) setUserLocation(JSON.parse(savedLoc));
-        if (savedCity) setCityName(savedCity);
-        setIsLoading(false);
-      } else {
-        // Prompt for geolocation
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const lat = position.coords.latitude;
-              const lng = position.coords.longitude;
-              const loc = { lat, lng };
-              setUserLocation(loc);
-              localStorage.setItem("nagrik_center_location", JSON.stringify(loc));
-
-              let city = "Bengaluru";
-              try {
-                const res = await fetch(`/api/places?q=${lat},${lng}&reverse=1`);
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data.results && data.results.length > 0) {
-                    city = data.results[0].name || data.results[0].address.split(",")[0] || "Your Location";
-                  }
-                }
-              } catch (err) {
-                console.warn("Reverse geocode failed:", err);
-              }
-              setCityName(city);
-              localStorage.setItem("nagrik_city_name", city);
-
-              const seeded = generateSeededIssues(lat, lng, city);
-              setIssues(seeded);
-              localStorage.setItem("nagrik_seeded_issues", JSON.stringify(seeded));
-
-              await analyzeAndStorePulse(seeded);
-              setIsLoading(false);
-            },
-            async (error) => {
-              console.warn("Geolocation denied/failed, falling back to Bangalore:", error);
-              const defaultLoc = { lat: 12.9716, lng: 77.5946 };
-              setUserLocation(defaultLoc);
-              localStorage.setItem("nagrik_center_location", JSON.stringify(defaultLoc));
-              setCityName("Bengaluru");
-              localStorage.setItem("nagrik_city_name", "Bengaluru");
-
-              const seeded = generateSeededIssues(defaultLoc.lat, defaultLoc.lng, "Bengaluru");
-              setIssues(seeded);
-              localStorage.setItem("nagrik_seeded_issues", JSON.stringify(seeded));
-
-              await analyzeAndStorePulse(seeded);
-              setIsLoading(false);
-            },
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-          );
-        } else {
-          // No geolocation, fallback
-          const defaultLoc = { lat: 12.9716, lng: 77.5946 };
-          setUserLocation(defaultLoc);
-          setCityName("Bengaluru");
-
-          const seeded = generateSeededIssues(defaultLoc.lat, defaultLoc.lng, "Bengaluru");
-          setIssues(seeded);
-          localStorage.setItem("nagrik_seeded_issues", JSON.stringify(seeded));
-          await analyzeAndStorePulse(seeded);
-          setIsLoading(false);
-        }
-      }
+    // If no saved data, persist the default seeded issues we already generated in useState
+    if (!hadSaved) {
+      localStorage.setItem("nagrik_seeded_issues", JSON.stringify(issues));
+      localStorage.setItem("nagrik_center_location", JSON.stringify(DEFAULT_LOC));
+      localStorage.setItem("nagrik_city_name", DEFAULT_CITY);
+      // Kick off pulse analysis in the background
+      void analyzeAndStorePulse(issues);
     }
 
-    void initSeeding();
-  }, [analyzeAndStorePulse]);
+    // Now try to upgrade to user's real location in the background
+    if (!locationUpgraded.current && navigator.geolocation) {
+      locationUpgraded.current = true;
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // Check if we already have data for this location (within ~500m)
+          const savedLoc = localStorage.getItem("nagrik_center_location");
+          if (savedLoc) {
+            const prev = JSON.parse(savedLoc);
+            const dist = Math.abs(prev.lat - lat) + Math.abs(prev.lng - lng);
+            if (dist < 0.005) return; // Already seeded for this location
+          }
+
+          // Get city name via reverse geocoding
+          let city = DEFAULT_CITY;
+          try {
+            const res = await fetch(`/api/places?q=${lat},${lng}&reverse=1`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.results?.[0]) {
+                city = data.results[0].name || data.results[0].address?.split(",")[0] || city;
+              }
+            }
+          } catch { /* keep default */ }
+
+          // Generate new location-specific issues and swap them in
+          const newIssues = generateSeededIssues(lat, lng, city);
+          setIssues(newIssues);
+          localStorage.setItem("nagrik_seeded_issues", JSON.stringify(newIssues));
+          localStorage.setItem("nagrik_center_location", JSON.stringify({ lat, lng }));
+          localStorage.setItem("nagrik_city_name", city);
+
+          // Re-analyze in background
+          void analyzeAndStorePulse(newIssues);
+        },
+        () => {
+          // Denied or failed — stay on default, no action needed
+          console.info("Location denied, staying on default seed data.");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Callback when user adds a report
   const handleAddIssue = useCallback((newIssue: Issue) => {
@@ -220,23 +225,6 @@ export default function App() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-dvh w-screen flex-col items-center justify-center bg-background p-6">
-        <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-nagrik-blue/10 border border-primary/20 shadow-2xl">
-          <span className="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-br from-primary to-nagrik-blue">
-            N
-          </span>
-          <Loader2 className="absolute -inset-1 animate-spin text-primary opacity-45" style={{ animationDuration: "3s" }} />
-        </div>
-        <h1 className="text-xl font-bold mb-2">Setting up Nagrik</h1>
-        <p className="text-sm text-muted-foreground text-center max-w-sm leading-relaxed">
-          Requesting location to seed your hyperlocal community dashboard and AI insights...
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-background">
       <header className="flex-shrink-0 z-40 glass-strong border-b border-border/50 px-3 py-2">
@@ -292,9 +280,9 @@ export default function App() {
                 selectedIssue={selectedIssue}
                 onSelectIssue={setSelectedIssue}
                 issues={issues}
-                pulse={pulse || mockPulse}
+                pulse={pulse}
                 alerts={alerts}
-                mood={mood || mockCityMood}
+                mood={mood}
                 insights={insights}
                 onUpdateIssues={setIssues}
               />
@@ -349,8 +337,8 @@ export default function App() {
             <AssistantPage
               onClose={() => setChatOpen(false)}
               issues={issues}
-              pulse={pulse || mockPulse}
-              cityMood={mood || mockCityMood}
+              pulse={pulse}
+              cityMood={mood}
               insights={insights}
             />
           </motion.div>
