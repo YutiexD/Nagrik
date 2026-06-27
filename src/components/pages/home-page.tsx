@@ -14,11 +14,11 @@ import type {
 import { generateFeedFromIssues } from "@/lib/demo-seeder";
 import CommunityPulseCard from "@/components/community-pulse-card";
 import LiveFeed from "@/components/live-feed";
-import FlashAlerts from "@/components/flash-alerts";
 import NearbyIssues from "@/components/nearby-issues";
 import CityMoodCard from "@/components/city-mood-card";
 import PredictiveInsightsCard from "@/components/predictive-insights-card";
 import MapPage from "@/components/pages/map-page";
+import { useTranslation } from "@/components/language-provider";
 
 interface HomePageProps {
   onNavigate: (tab: Tab) => void;
@@ -61,6 +61,7 @@ export default function HomePage({
   insights,
   onVerifyIssue,
 }: HomePageProps) {
+  const { t } = useTranslation();
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -69,7 +70,6 @@ export default function HomePage({
 
   const focusMapIssue = (issue: Issue) => {
     setFocusedIssueId(issue.id);
-    onSelectIssue(issue);
     mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -88,55 +88,58 @@ export default function HomePage({
     >
       <LiveFeed feed={feed} />
 
-      <div className="px-4 space-y-4 pt-3">
-        <motion.div ref={mapSectionRef} variants={fadeUp} className="scroll-mt-20">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground/90 flex items-center gap-1.5">
-              <MapPinned className="w-3.5 h-3.5 text-primary" />
-              Civic Map
-            </h2>
-            <span className="text-[11px] text-muted-foreground">
-              {issues.length} live pins
-            </span>
-          </div>
-          <MapPage
-            issues={issues}
-            onSelectIssue={focusMapIssue}
-            focusIssueId={focusedIssueId}
-          />
-        </motion.div>
-
-        <motion.div variants={fadeUp}>
-          <NearbyIssues
-            issues={issues}
-            onSelectIssue={focusMapIssue}
-            onVerifyIssue={handleVerify}
-          />
-        </motion.div>
-
-        <motion.div variants={fadeUp}>
-          <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-            <CommunityPulseCard pulse={pulse} />
-            <FlashAlerts alerts={alerts} />
-          </div>
-        </motion.div>
-
-        <motion.div variants={fadeUp}>
-          <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-            <CityMoodCard mood={mood} />
-            <PredictiveInsightsCard insights={insights} />
-          </div>
-        </motion.div>
-
+      <div className="px-4 space-y-6 pt-4 pb-8">
+        {/* 2. Primary Action CTA - Easy to locate and trigger */}
         <motion.div variants={fadeUp}>
           <button
             id="report-cta-home"
             onClick={() => onNavigate("report")}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-semibold text-base shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-semibold text-base shadow-lg shadow-primary/20 active:scale-[0.98] transition-all hover:brightness-110 flex items-center justify-center gap-2 cursor-pointer"
           >
             <TrendingUp className="w-5 h-5" />
-            Report an Issue
+            {t("reportAnIssue")}
           </button>
+        </motion.div>
+
+        {/* 3. Interactive Geo-Context - Visually prominent map */}
+        <motion.div ref={mapSectionRef} variants={fadeUp} className="scroll-mt-20">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground/90 flex items-center gap-1.5">
+              <MapPinned className="w-3.5 h-3.5 text-primary" />
+              {t("civicMap")}
+            </h2>
+            <span className="text-[11px] text-muted-foreground">
+              {issues.length} {t("livePins")}
+            </span>
+          </div>
+          <MapPage
+            issues={issues}
+            onSelectIssue={onSelectIssue}
+            focusIssueId={focusedIssueId}
+          />
+        </motion.div>
+
+        {/* 4. Actionable Local Feed - Paired directly with Map location */}
+        <motion.div variants={fadeUp}>
+          <NearbyIssues
+            issues={issues}
+            onSelectIssue={onSelectIssue}
+            onFocusMap={focusMapIssue}
+            onVerifyIssue={handleVerify}
+          />
+        </motion.div>
+
+        {/* 5. Qualitative and Quantitative Health Analytics */}
+        <motion.div variants={fadeUp}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <CommunityPulseCard pulse={pulse} />
+            <CityMoodCard mood={mood} />
+          </div>
+        </motion.div>
+
+        {/* 6. Future-facing AI Projections */}
+        <motion.div variants={fadeUp}>
+          <PredictiveInsightsCard insights={insights} />
         </motion.div>
       </div>
     </motion.div>

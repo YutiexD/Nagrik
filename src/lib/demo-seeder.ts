@@ -367,6 +367,10 @@ export function generateFeedFromIssues(issues: Issue[]): FeedItem[] {
       text,
       timestamp,
       category: issue.category,
+      status: issue.status,
+      title: issue.title,
+      address: issue.address.split(",")[0],
+      verification_count: issue.verification_count,
     };
   });
 }

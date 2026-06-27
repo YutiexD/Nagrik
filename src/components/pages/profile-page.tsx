@@ -3,12 +3,13 @@
 import { motion } from "framer-motion";
 import { User, FileText, Shield, Users, Award, TrendingUp, Clock } from "lucide-react";
 import { mockProfile } from "@/lib/mock-data";
+import { useTranslation } from "@/components/language-provider";
 
 const statItems = [
-  { icon: TrendingUp, label: "Impact Score", value: mockProfile.impact_score, color: "text-primary" },
-  { icon: FileText, label: "Reports Created", value: mockProfile.reports_created, color: "text-nagrik-blue" },
-  { icon: Shield, label: "Issues Verified", value: mockProfile.issues_verified, color: "text-nagrik-orange" },
-  { icon: Users, label: "People Helped", value: mockProfile.people_helped.toLocaleString(), color: "text-green-400" },
+  { key: "impactScore", icon: TrendingUp, label: "Impact Score", value: mockProfile.impact_score, color: "text-primary" },
+  { key: "reportsCreated", icon: FileText, label: "Reports Created", value: mockProfile.reports_created, color: "text-nagrik-blue" },
+  { key: "issuesVerified", icon: Shield, label: "Issues Verified", value: mockProfile.issues_verified, color: "text-nagrik-orange" },
+  { key: "peopleHelped", icon: Users, label: "People Helped", value: mockProfile.people_helped.toLocaleString(), color: "text-green-400" },
 ];
 
 const actionIcons: Record<string, string> = {
@@ -17,11 +18,19 @@ const actionIcons: Record<string, string> = {
   "marked resolved": "✅",
 };
 
+const actionKeys: Record<string, string> = {
+  verified: "verified",
+  reported: "reported",
+  "marked resolved": "markedResolved",
+};
+
 export default function ProfilePage() {
+  const { t } = useTranslation();
+
   return (
     <div className="safe-bottom">
       <header className="sticky top-0 z-30 glass-strong px-5 py-4">
-        <h1 className="text-lg font-bold">Profile</h1>
+        <h1 className="text-lg font-bold">{t("profile")}</h1>
       </header>
 
       <div className="px-4 py-4 space-y-4">
@@ -32,24 +41,27 @@ export default function ProfilePage() {
           <h2 className="text-lg font-bold">{mockProfile.name}</h2>
           <div className="flex items-center gap-1.5 mt-1">
             <Award className="w-3.5 h-3.5 text-primary" />
-            <span className="text-sm text-primary font-medium">{mockProfile.title}</span>
+            <span className="text-sm text-primary font-medium">{t(mockProfile.title) || mockProfile.title}</span>
           </div>
         </motion.div>
 
         <div className="grid grid-cols-2 gap-3">
           {statItems.map((item, i) => (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="rounded-2xl bg-card border border-border/60 p-4 shadow-sm">
+            <motion.div key={item.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="rounded-2xl bg-card border border-border/60 p-4 shadow-sm">
               <item.icon className={`w-5 h-5 ${item.color} mb-2`} />
               <div className="text-2xl font-bold tabular-nums">{item.value}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">{item.label}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">{t(item.key)}</div>
             </motion.div>
           ))}
         </div>
 
+
+
+
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="rounded-2xl bg-card border border-border/60 p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">Recent Activity</span>
+            <span className="text-sm font-semibold">{t("recentActivity")}</span>
           </div>
           <div className="space-y-2.5">
             {mockProfile.recent_activity.map((act) => (
@@ -57,10 +69,10 @@ export default function ProfilePage() {
                 <span className="text-sm mt-0.5">{actionIcons[act.action] || "📌"}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px]">
-                    <span className="capitalize font-medium">{act.action}</span>{" "}
-                    <span className="text-muted-foreground">{act.issue_title}</span>
+                    <span className="capitalize font-medium">{t(actionKeys[act.action] || act.action)}</span>{" "}
+                    <span className="text-muted-foreground">{t(act.issue_title) || act.issue_title}</span>
                   </p>
-                  <p className="text-[10px] text-muted-foreground">{act.timestamp}</p>
+                  <p className="text-[10px] text-muted-foreground">{t(act.timestamp) || act.timestamp}</p>
                 </div>
               </div>
             ))}

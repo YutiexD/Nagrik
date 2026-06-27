@@ -11,13 +11,15 @@ import IssueDetailSheet from "@/components/issue-detail-sheet";
 import type { Issue, IssueStatus, TimelineEvent, CommunityPulse, FlashAlert, CityMood, PredictiveInsight } from "@/lib/types";
 import { generateSeededIssues } from "@/lib/demo-seeder";
 import { mockPulse, mockAlerts, mockCityMood, mockInsights } from "@/lib/mock-data";
+import { useTranslation } from "@/components/language-provider";
+import ChooseLanguageCard from "@/components/choose-language-card";
 
 export type Tab = "home" | "report" | "profile";
 
-const topTabs: { id: Tab; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "report", label: "Report", icon: Plus },
-  { id: "profile", label: "Profile", icon: User },
+const topTabs: { id: Tab; labelKey: string; icon: typeof Home }[] = [
+  { id: "home", labelKey: "home", icon: Home },
+  { id: "report", labelKey: "report", icon: Plus },
+  { id: "profile", labelKey: "profile", icon: User },
 ];
 
 // Default fallback location — Bengaluru
@@ -25,6 +27,7 @@ const DEFAULT_LOC = { lat: 12.9716, lng: 77.5946 };
 const DEFAULT_CITY = "Bengaluru";
 
 export default function App() {
+  const { language, setLanguage, t, currentLanguageInfo } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -73,12 +76,13 @@ export default function App() {
   const locationUpgraded = useRef(false);
 
   // Helper to fetch/analyze pulse data via Gemini
-  const analyzeAndStorePulse = useCallback(async (issueList: Issue[]) => {
+  const analyzeAndStorePulse = useCallback(async (issueList: Issue[], langName?: string) => {
     try {
+      const targetLang = langName || currentLanguageInfo?.name || "English";
       const res = await fetch("/api/pulse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ issues: issueList }),
+        body: JSON.stringify({ issues: issueList, lang: targetLang }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -103,11 +107,25 @@ export default function App() {
     } catch (err) {
       console.warn("Could not call pulse API, using static fallbacks:", err);
     }
-  }, []);
+  }, [currentLanguageInfo]);
 
   // On mount: save default issues if first time, then try upgrading to real location in background
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Cache version migration to clear any stale single-language API caches from prior versions
+    const cacheVersion = localStorage.getItem("nagrik_cache_version_v2");
+    if (!cacheVersion) {
+      localStorage.removeItem("nagrik_seeded_pulse");
+      localStorage.removeItem("nagrik_seeded_alerts");
+      localStorage.removeItem("nagrik_seeded_mood");
+      localStorage.removeItem("nagrik_seeded_insights");
+      localStorage.setItem("nagrik_cache_version_v2", "true");
+      setPulse(mockPulse);
+      setAlerts(mockAlerts);
+      setMood(mockCityMood);
+      setInsights(mockInsights);
+    }
 
     const hadSaved = localStorage.getItem("nagrik_seeded_issues");
 
@@ -169,6 +187,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
+
   // Callback when user adds a report
   const handleAddIssue = useCallback((newIssue: Issue) => {
     setIssues((current) => {
@@ -207,7 +227,9 @@ export default function App() {
       ],
     };
 
-    setSelectedIssue(updatedIssue);
+    if (selectedIssue && selectedIssue.id === issue.id) {
+      setSelectedIssue(updatedIssue);
+    }
     setIssues((current) => {
       const next = current.map((i) => (i.id === issue.id ? updatedIssue : i));
       localStorage.setItem("nagrik_seeded_issues", JSON.stringify(next));
@@ -225,8 +247,24 @@ export default function App() {
     }
   };
 
+  // Trigger pulse analysis ONLY when the issues list count changes
+  useEffect(() => {
+    if (language && issues.length > 0) {
+      const lastIssuesCount = localStorage.getItem("nagrik_last_issues_count");
+      const currentCount = String(issues.length);
+      if (lastIssuesCount !== currentCount) {
+        localStorage.setItem("nagrik_last_issues_count", currentCount);
+        void analyzeAndStorePulse(issues, currentLanguageInfo?.name);
+      }
+    }
+  }, [language, currentLanguageInfo, issues, analyzeAndStorePulse]);
+
+  if (language === null) {
+    return <ChooseLanguageCard onSelectLanguage={setLanguage} />;
+  }
+
   return (
-    <div className="flex flex-col h-dvh overflow-hidden bg-background">
+    <div className="flex flex-col h-dvh overflow-hidden bg-transparent">
       <header className="flex-shrink-0 z-40 glass-strong border-b border-border/50 px-3 py-2">
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-2">
           <button
@@ -256,7 +294,7 @@ export default function App() {
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="hidden sm:inline">{t(tab.labelKey)}</span>
                 </button>
               );
             })}
@@ -285,6 +323,7 @@ export default function App() {
                 mood={mood}
                 insights={insights}
                 onUpdateIssues={setIssues}
+                onVerifyIssue={verifySelectedIssue}
               />
             </motion.div>
           )}
@@ -319,10 +358,13 @@ export default function App() {
 
       <button
         onClick={() => setChatOpen((open) => !open)}
-        className="fixed bottom-4 right-4 z-[70] grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 transition-transform active:scale-95"
+        className="fixed bottom-6 right-6 z-[1010] flex items-center gap-2 px-5 py-3.5 rounded-full bg-gradient-to-r from-primary to-nagrik-blue text-white shadow-2xl shadow-primary/35 hover:shadow-primary/45 transition-all hover:scale-[1.04] active:scale-[0.97] cursor-pointer border border-primary/20"
         aria-label="Open AI chat"
       >
-        <Bot className="h-5 w-5" />
+        <Bot className="h-5 w-5 animate-pulse text-white" />
+        <span className="text-sm font-extrabold tracking-wide">
+          {t("askAI") || "Ask AI 💬"}
+        </span>
       </button>
 
       <AnimatePresence>
@@ -332,7 +374,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.96 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed bottom-20 right-4 z-[70] h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border/70 bg-background shadow-2xl"
+            className="fixed bottom-20 right-4 z-[1010] h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border/70 bg-background shadow-2xl"
           >
             <AssistantPage
               onClose={() => setChatOpen(false)}

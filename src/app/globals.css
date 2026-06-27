@@ -93,7 +93,7 @@
 .dark {
   --background: oklch(0.1 0.005 240);
   --foreground: oklch(0.93 0.005 240);
-  --card: oklch(0.15 0.008 240);
+  --card: oklch(0.15 0.008 240 / 82%);
   --card-foreground: oklch(0.93 0.005 240);
   --popover: oklch(0.15 0.008 240);
   --popover-foreground: oklch(0.93 0.005 240);
@@ -188,3 +188,63 @@ body {
 input, textarea, select {
   font-size: 16px !important;
 }
+
+@keyframes float-blob-1 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(60px, -80px) scale(1.15);
+  }
+  66% {
+    transform: translate(-40px, 40px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+@keyframes float-blob-2 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-80px, 80px) scale(1.2);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+@keyframes float-blob-3 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(-30px, -60px) scale(0.85);
+  }
+  66% {
+    transform: translate(80px, 40px) scale(1.1);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob-1 {
+  animation: float-blob-1 25s infinite ease-in-out;
+}
+.animate-blob-2 {
+  animation: float-blob-2 30s infinite ease-in-out;
+}
+.animate-blob-3 {
+  animation: float-blob-3 20s infinite ease-in-out;
+}
+
+/* Ensure all cards with bg-card have a beautiful frosted glass blur effect */
+.bg-card {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+

@@ -8,12 +8,13 @@ type ReportPart =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { text, imageBase64, imageType, videoBase64, videoType, audioBase64, audioType } = body;
+    const { text, imageBase64, imageType, videoBase64, videoType, audioBase64, audioType, lang = "English" } = body;
 
     const model = getGeminiModel();
 
     const systemPrompt = `You are Nagrik AI, an issue analysis engine for a civic platform.
-Analyze the reported issue and respond ONLY with valid JSON (no markdown fences):
+Analyze the reported issue and respond ONLY with valid JSON (no markdown fences).
+You MUST write all textual fields (specifically: the "title", "description", and "root_cause") in the following language: ${lang}.
 {
   "title": "short descriptive title",
   "category": "one of: road_damage, water, waste, lighting, drainage, noise, safety, other",

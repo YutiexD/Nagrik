@@ -60,6 +60,10 @@ export interface FeedItem {
   text: string;
   timestamp: string;
   category: IssueCategory;
+  status?: string;
+  title?: string;
+  address?: string;
+  verification_count?: number;
 }
 
 export interface CommunityPulse {

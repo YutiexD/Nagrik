@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SmokeBackground } from "@/components/ui/spooky-smoke-animation";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -32,6 +33,8 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
   ],
 };
+
+import { LanguageProvider } from "@/components/language-provider";
 
 export default function RootLayout({
   children,
@@ -81,7 +84,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans relative">
+        <SmokeBackground smokeColor="#10B981" />
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }

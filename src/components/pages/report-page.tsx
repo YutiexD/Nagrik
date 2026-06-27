@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { Tab } from "@/app/page";
 import type { Issue } from "@/lib/types";
+import { useTranslation } from "@/components/language-provider";
 
 interface Props {
   onNavigate: (tab: Tab) => void;
@@ -58,7 +59,35 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function formatLocationStatus(status: string, t: (key: string) => string, lang: string | null) {
+  if (status === "Requesting location permission..." || status === "Requesting your location...") {
+    return t("requestingLocation") || status;
+  }
+  if (status === "Detecting your location...") {
+    return t("detectingLocation") || status;
+  }
+  if (status === "Location is not supported. Use manual location." || status === "Location is not supported in this browser.") {
+    return t("locationNotSupported") || status;
+  }
+  if (status === "Could not detect GPS. Enter location manually." || status === "Could not get a fresh location fix.") {
+    return t("locationFixFailed") || status;
+  }
+  if (status.startsWith("GPS detected within ")) {
+    const accuracy = status.replace("GPS detected within ", "").replace("m", "");
+    if (lang === "hi") {
+      return `जीपीएस ने ${accuracy} मीटर के भीतर स्थान पाया`;
+    }
+    return status;
+  }
+  if (status.startsWith("GPS: ")) {
+    const addr = status.replace("GPS: ", "");
+    return `GPS: ${t(addr) || addr}`;
+  }
+  return t(status) || status;
+}
+
 export default function ReportPage({ onNavigate, onAddIssue }: Props) {
+  const { t, currentLanguageInfo } = useTranslation();
   const [mode, setMode] = useState<InputMode>("image");
   const [step, setStep] = useState<Step>("input");
   const [textInput, setTextInput] = useState("");
@@ -142,7 +171,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   // Reverse geocode coords to a human-readable address
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
     try {
-      const res = await fetch(`/api/places?q=${encodeURIComponent(`${lat},${lng}}`)}&reverse=1`);
+      const res = await fetch(`/api/places?q=${encodeURIComponent(`${lat},${lng}`)}&reverse=1`);
       if (!res.ok) return null;
       const data = await res.json();
       return data.results?.[0]?.address || null;
@@ -314,7 +343,9 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
     setError(null);
 
     try {
-      const payload: Record<string, string> = {};
+      const payload: Record<string, string> = {
+        lang: currentLanguageInfo?.name || "English"
+      };
       const location = await getReportLocation();
       if (location) {
         payload.lat = String(location.lat);
@@ -456,11 +487,11 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
       <header className="sticky top-0 z-30 glass-strong px-5 py-4 flex items-center gap-3">
         <button
           onClick={() => onNavigate("home")}
-          className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+          className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-all cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold">Report Issue</h1>
+        <h1 className="text-xl font-extrabold tracking-tight">{t("reportAnIssue")}</h1>
       </header>
 
       <div className="flex-1 px-4 py-4">
@@ -473,7 +504,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               exit={{ opacity: 0, y: -8 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-5 gap-2">
                 {inputModes.map((m) => (
                   <button
                     key={m.id}
@@ -482,14 +513,14 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                       setMode(m.id);
                       clearFile();
                     }}
-                    className={`flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all ${
+                    className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl transition-all cursor-pointer border ${
                       mode === m.id
-                        ? "bg-primary/10 text-primary border border-primary/20"
-                        : "bg-muted text-muted-foreground"
+                        ? "bg-primary/20 text-primary border-primary/40 shadow-sm"
+                        : "bg-muted hover:bg-muted/90 text-muted-foreground border-transparent"
                     }`}
                   >
-                    <m.icon className="w-4 h-4" />
-                    <span className="text-[10px] font-medium">{m.label}</span>
+                    <m.icon className="w-5 h-5" />
+                    <span className="text-xs font-semibold">{t(m.id) || m.label}</span>
                   </button>
                 ))}
               </div>
@@ -514,11 +545,11 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               {mode === "image" && !preview && (
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3"
+                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
                 >
                   <Camera className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">
-                    Tap to take a photo or upload
+                  <p className="text-base text-muted-foreground font-semibold">
+                    {t("tapToTakePhotoOrUpload")}
                   </p>
                 </button>
               )}
@@ -526,11 +557,11 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               {mode === "video" && !preview && (
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3"
+                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
                 >
                   <Video className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">
-                    Record or upload a short video
+                  <p className="text-base text-muted-foreground font-semibold">
+                    {t("recordOrUploadShortVideo")}
                   </p>
                 </button>
               )}
@@ -565,14 +596,14 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                       </div>
                       <button
                         onClick={stopRecording}
-                        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 text-red-400 font-semibold text-sm border border-red-500/20"
+                        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 text-red-400 font-semibold text-sm border border-red-500/20 cursor-pointer"
                       >
                         <Square className="w-4 h-4" />
-                        Stop Recording
+                        {t("stopRecording")}
                       </button>
                     </>
                   ) : (
-                    <button onClick={startRecording} className="flex flex-col items-center gap-3">
+                    <button onClick={startRecording} className="flex flex-col items-center gap-3 cursor-pointer">
                       <motion.div
                         animate={{ scale: [1, 1.08, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
@@ -580,7 +611,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                       >
                         <Mic className="w-9 h-9 text-primary" />
                       </motion.div>
-                      <p className="text-sm text-muted-foreground">Tap to start recording</p>
+                      <p className="text-base text-muted-foreground font-semibold">{t("tapToStartRecording")}</p>
                     </button>
                   )}
                 </div>
@@ -589,11 +620,11 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               {mode === "audio_upload" && !preview && (
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3"
+                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
                 >
                   <Upload className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">
-                    Upload an existing audio file
+                  <p className="text-base text-muted-foreground font-semibold">
+                    {t("uploadExistingAudioFile")}
                   </p>
                 </button>
               )}
@@ -602,8 +633,8 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                 <textarea
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Describe the issue you're seeing..."
-                  className="w-full h-32 rounded-2xl bg-muted/30 border border-border p-4 text-sm resize-none outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                  placeholder={t("describeIssue")}
+                  className="w-full h-36 rounded-2xl bg-muted/30 border border-border p-4 text-base resize-none outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60"
                 />
               )}
 
@@ -631,52 +662,52 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                   )}
                   <button
                     onClick={clearFile}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center"
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5 text-white" />
                   </button>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-border/60 bg-card p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+              <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold">Report location</p>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {locationStatus}
+                    <p className="text-sm font-bold">{t("reportLocation") || "Report location"}</p>
+                    <p className="truncate text-xs text-muted-foreground mt-0.5">
+                      {formatLocationStatus(locationStatus, t, currentLanguageInfo?.code || "en")}
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => {
                       setLocationMode("gps");
                       detectLocation();
                     }}
-                    className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                    className={`rounded-xl px-4 py-3 text-sm font-bold cursor-pointer transition-all border ${
                       locationMode === "gps"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground"
+                        ? "bg-primary/25 text-primary border-primary/45 shadow-sm"
+                        : "bg-muted hover:bg-muted/90 text-muted-foreground border-transparent"
                     }`}
                   >
-                    Use GPS
+                    {t("useGPS")}
                   </button>
                   <button
                     onClick={() => setLocationMode("manual")}
-                    className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                    className={`rounded-xl px-4 py-3 text-sm font-bold cursor-pointer transition-all border ${
                       locationMode === "manual"
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground"
+                        ? "bg-primary/25 text-primary border-primary/45 shadow-sm"
+                        : "bg-muted hover:bg-muted/90 text-muted-foreground border-transparent"
                     }`}
                   >
-                    Manual
+                    {t("manual")}
                   </button>
                 </div>
 
                 {locationMode === "gps" && (
-                  <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  <p className="rounded-xl bg-muted/50 px-4 py-3 text-xs sm:text-sm text-muted-foreground leading-relaxed">
                     {location
                       ? `${location.address}${location.accuracy ? `, +/-${Math.round(location.accuracy)}m` : ""}`
                       : "Waiting for browser location permission..."}
@@ -684,7 +715,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                 )}
 
                 {locationMode === "manual" && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="relative">
                       <input
                         type="text"
@@ -696,10 +727,10 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                         onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                         placeholder="Search address, landmark, or city..."
-                        className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                        className="w-full rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm sm:text-base outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all placeholder:text-muted-foreground/60"
                       />
                       {showSuggestions && addressSuggestions.length > 0 && (
-                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-40 overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
                           {addressSuggestions.map((s) => (
                             <button
                               key={s.id}
@@ -714,52 +745,52 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                                 setAddressSuggestions([]);
                                 setError(null);
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-primary/10 transition-colors"
+                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm hover:bg-primary/10 transition-colors cursor-pointer"
                             >
-                              <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                              <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
                               <span className="min-w-0 flex-1 truncate">{s.address}</span>
                             </button>
                           ))}
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <input
                         type="number"
                         value={manualLat}
                         onChange={(e) => setManualLat(e.target.value)}
                         placeholder="Latitude"
-                        className="min-w-0 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                        className="min-w-0 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm sm:text-base outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all placeholder:text-muted-foreground/60"
                       />
                       <input
                         type="number"
                         value={manualLng}
                         onChange={(e) => setManualLng(e.target.value)}
                         placeholder="Longitude"
-                        className="min-w-0 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                        className="min-w-0 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm sm:text-base outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all placeholder:text-muted-foreground/60"
                       />
                     </div>
                     <button
                       onClick={() => void geocodeManualLocation()}
-                      className="w-full rounded-xl bg-primary/10 px-3 py-2 text-xs font-semibold text-primary"
+                      className="w-full rounded-xl bg-primary/20 hover:bg-primary/30 px-4 py-3 text-xs sm:text-sm font-bold text-primary transition-all cursor-pointer border border-primary/20"
                     >
-                      Find coordinates from address
+                      {t("findCoords")}
                     </button>
                   </div>
                 )}
               </div>
 
               {error && (
-                <p className="text-xs text-red-400 text-center">{error}</p>
+                <p className="text-sm text-red-400 text-center font-medium">{error}</p>
               )}
 
               <button
                 onClick={handleSubmit}
                 disabled={mode === "text" && !textInput.trim() && !selectedFile}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-semibold text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-40"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-bold text-base shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-40 cursor-pointer hover:brightness-110"
               >
-                <Sparkles className="w-4 h-4" />
-                Analyze with AI
+                <Sparkles className="w-5 h-5" />
+                {t("analyzeAI")}
               </button>
             </motion.div>
           )}
@@ -783,9 +814,9 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               >
                 <Loader2 className="w-10 h-10 text-primary" />
               </motion.div>
-              <h2 className="text-lg font-bold mb-1">Analyzing with Gemini</h2>
+              <h2 className="text-lg font-bold mb-1">{t("analyzingAI")}</h2>
               <p className="text-sm text-muted-foreground text-center">
-                Understanding your report and categorizing...
+                {t("understandingReport")}
               </p>
             </motion.div>
           )}
@@ -796,38 +827,38 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="space-y-4"
+              className="space-y-5"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="w-5 h-5 text-primary" />
+                <span className="text-base font-bold">
                   AI Analysis Complete
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-card border border-border/60 p-4 space-y-3">
+              <div className="rounded-2xl bg-card border border-border/60 p-5 space-y-4 shadow-sm">
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <span className="text-xs font-bold text-muted-foreground">
                     Title
                   </span>
-                  <p className="text-sm font-semibold mt-0.5">
+                  <p className="text-base font-bold mt-1 text-foreground/95">
                     {analysis.title}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <span className="text-xs font-bold text-muted-foreground">
                     Category
                   </span>
-                  <p className="text-sm font-medium mt-0.5 text-primary">
+                  <p className="text-base font-bold mt-1 text-primary">
                     {analysis.category.replace("_", " ")}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <span className="text-xs font-bold text-muted-foreground">
                     Severity
                   </span>
                   <p
-                    className={`text-sm font-medium mt-0.5 capitalize ${
+                    className={`text-base font-bold mt-1 capitalize ${
                       severityColor[analysis.severity] || "text-foreground"
                     }`}
                   >
@@ -835,22 +866,22 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <span className="text-xs font-bold text-muted-foreground">
                     Description
                   </span>
-                  <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
+                  <p className="text-sm sm:text-base text-muted-foreground mt-1 leading-relaxed">
                     {analysis.description}
                   </p>
                 </div>
                 {analysis.root_cause && (
                   <div>
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <span className="text-xs font-bold text-muted-foreground">
                       Likely Cause
                     </span>
-                    <p className="text-[13px] mt-0.5">
+                    <p className="text-sm sm:text-base mt-1 text-foreground/90 font-medium">
                       {analysis.root_cause}
                       {analysis.root_cause_confidence && (
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground font-normal">
                           {" "}
                           ({analysis.root_cause_confidence}% confidence)
                         </span>
@@ -860,9 +891,9 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/50">
-                <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
-                <p className="text-xs">
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-muted/50 border border-border/30">
+                <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
+                <p className="text-sm font-semibold text-muted-foreground min-w-0 flex-1 truncate">
                   {locationMode === "manual"
                     ? manualAddress || location?.address || "Manual location pending"
                     : location?.address || "GPS location pending"}
@@ -871,10 +902,10 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
 
               <button
                 onClick={handleFinalSubmit}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-semibold text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-bold text-base shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
               >
-                <Check className="w-4 h-4" />
-                Submit Report
+                <Check className="w-5 h-5" />
+                {t("submitReport")}
               </button>
             </motion.div>
           )}

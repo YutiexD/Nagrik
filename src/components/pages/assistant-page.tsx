@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Send, Sparkles, Loader2, X } from "lucide-react";
+import { useTranslation } from "@/components/language-provider";
 import {
   mockPulse,
   mockIssues,
@@ -25,12 +26,44 @@ interface AssistantPageProps {
   insights?: PredictiveInsight[];
 }
 
-const suggestions = [
-  "Why are garbage issues increasing?",
-  "Which area has most complaints?",
-  "What is happening around me?",
-  "What gets resolved fastest?",
-];
+const localizedSuggestions: Record<string, string[]> = {
+  en: [
+    "Why are garbage issues increasing?",
+    "Which area has most complaints?",
+    "What is happening around me?",
+    "What gets resolved fastest?",
+  ],
+  hi: [
+    "कचरे की समस्या क्यों बढ़ रही है?",
+    "किस क्षेत्र में सबसे अधिक शिकायतें हैं?",
+    "मेरे आसपास क्या हो रहा है?",
+    "क्या सबसे तेजी से हल होता है?",
+  ],
+  bn: [
+    "আবর্জনার সমস্যা কেন বাড়ছে?",
+    "কোন এলাকায় সবচেয়ে বেশি অভিযোগ আছে?",
+    "আমার চারপাশে কি ঘটছে?",
+    "কোনটি সবচেয়ে দ্রুত সমাধান হয়?",
+  ],
+  te: [
+    "చెత్త समस्याలు ఎందుకు పెరుగుతున్నాయి?",
+    "ఏ ప్రాంతంలో ఎక్కువ ఫిర్యాదులు ఉన్నాయి?",
+    "నా చుట్టూ ఏం జరుగుతోంది?",
+    "ఏది వేగంగా పరిష్కరించబడుతుంది?",
+  ],
+  mr: [
+    "कचऱ्याच्या समस्या का वाढत आहेत?",
+    "कोणत्या भागात सर्वाधिक तक्रारी आहेत?",
+    "माझ्या सभोवताली काय घडत आहे?",
+    "काय सर्वात जलद सुटते?",
+  ],
+  ta: [
+    "குப்பை பிரச்சினைகள் ஏன் அதிகரிக்கின்றன?",
+    "எந்தப் பகுதியில் அதிக புகார்கள் உள்ளன?",
+    "என்னைச் சுற்றி என்ன நடக்கிறது?",
+    "எது மிக வேகமாக தீர்க்கப்படுகிறது?",
+  ],
+};
 
 export default function AssistantPage({
   onClose,
@@ -39,6 +72,9 @@ export default function AssistantPage({
   cityMood,
   insights,
 }: AssistantPageProps) {
+  const { t, language, currentLanguageInfo } = useTranslation();
+  const suggestions = localizedSuggestions[language || "en"] || localizedSuggestions.en;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,6 +110,7 @@ export default function AssistantPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: text.trim(),
+          lang: currentLanguageInfo?.name || "English",
           context: {
             pulse: pulse || mockPulse,
             issues: (issues || mockIssues).map((i) => ({
@@ -133,50 +170,49 @@ export default function AssistantPage({
 
   return (
     <div className="h-full flex flex-col">
-      <header className="flex-shrink-0 glass-strong px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
+      <header className="flex-shrink-0 glass-strong px-5 py-4 border-b border-border/40">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-5 h-5 text-primary animate-pulse" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold">Ask Your Area</h1>
-            <p className="text-[11px] text-muted-foreground">
-              AI-powered community insights
+            <h1 className="text-xl font-extrabold tracking-tight">{t("askYourArea")}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t("aiInsights")}
             </p>
           </div>
           {onClose && (
             <button
               onClick={onClose}
-              className="grid h-8 w-8 place-items-center rounded-full bg-muted hover:bg-muted/80"
-              aria-label="Close AI chat"
+              className="grid h-10 w-10 place-items-center rounded-full bg-muted hover:bg-muted/80 transition-all cursor-pointer"
+              aria-label={t("close")}
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
           )}
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
         {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center py-8"
+            className="flex flex-col items-center py-6"
           >
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <Sparkles className="w-8 h-8 text-primary" />
             </div>
-            <h2 className="text-base font-bold mb-1">
-              Ask anything about your area
+            <h2 className="text-lg font-bold mb-1.5 text-center">
+              {t("askAnything")}
             </h2>
-            <p className="text-sm text-muted-foreground text-center mb-6 max-w-[280px]">
-              Get AI-powered insights about issues, trends and patterns in your
-              neighbourhood.
+            <p className="text-base text-muted-foreground text-center mb-6 max-w-[300px] leading-relaxed">
+              {t("askDescription")}
             </p>
-            <div className="w-full space-y-2">
+            <div className="w-full space-y-2.5">
               {suggestions.map((s) => (
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="w-full text-left px-4 py-3 rounded-xl bg-muted/50 hover:bg-muted text-sm transition-colors"
+                  className="w-full text-left px-4 py-3.5 rounded-2xl bg-muted/50 hover:bg-muted text-sm sm:text-base font-semibold transition-colors border border-border/20 cursor-pointer"
                 >
                   {s}
                 </button>
@@ -195,10 +231,10 @@ export default function AssistantPage({
             }`}
           >
             <div
-              className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+              className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm sm:text-base leading-relaxed shadow-sm border ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-tr-md"
-                  : "bg-card border border-border/60 rounded-tl-md"
+                  ? "bg-primary text-primary-foreground rounded-tr-md border-transparent"
+                  : "bg-card border-border/60 rounded-tl-md"
               }`}
             >
               {msg.content}
@@ -212,29 +248,29 @@ export default function AssistantPage({
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="px-4 py-3 rounded-2xl rounded-tl-md bg-card border border-border/60">
+            <div className="px-4 py-3.5 rounded-2xl rounded-tl-md bg-card border border-border/60">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />
             </div>
           </motion.div>
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t border-border/50 p-3 glass-strong">
+      <div className="flex-shrink-0 border-t border-border/50 p-4 glass-strong">
         <div className="flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend(input)}
-            placeholder="Ask about your area..."
-            className="flex-1 px-4 py-3 rounded-xl bg-muted/50 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+            placeholder={t("askPlaceholder")}
+            className="flex-1 px-4 py-3.5 rounded-2xl bg-muted/50 text-sm sm:text-base outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60"
           />
           <button
             onClick={() => handleSend(input)}
             disabled={!input.trim() || loading}
-            className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all"
+            className="w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-5 h-5" />
           </button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { Expand, Layers, Locate, MapPin, Minimize2, Search, X, Navigation } from
 import dynamic from "next/dynamic";
 import type { Issue } from "@/lib/types";
 import { CATEGORY_ICONS } from "@/lib/types";
+import { useTranslation } from "@/components/language-provider";
 
 /* ─── Dynamic imports for Leaflet (SSR-safe) ─── */
 const MapContainer = dynamic(
@@ -93,7 +94,10 @@ const MapControllerInner = dynamic(
           map.flyTo([target.lat, target.lng], target.zoom, {
             duration: 0.8,
           });
-          onConsumed();
+          const timer = setTimeout(() => {
+            onConsumed();
+          }, 150);
+          return () => clearTimeout(timer);
         }, [map, target, onConsumed]);
 
         return null;
@@ -229,6 +233,7 @@ function LeafletMapView({
   mapType: "roadmap" | "satellite";
   isFullscreen?: boolean;
 }) {
+  const { t } = useTranslation();
   const icons = useLeafletIcons();
   const tile = mapType === "satellite" ? TILE_LAYERS.satellite : TILE_LAYERS.dark;
 
@@ -292,7 +297,7 @@ function LeafletMapView({
           >
             <Popup>
               <div style={{ minWidth: 160 }}>
-                <strong style={{ fontSize: 13 }}>{issue.title}</strong>
+                <strong style={{ fontSize: 13 }}>{t(issue.title) || issue.title}</strong>
                 <p style={{ fontSize: 11, color: "#888", margin: "4px 0 2px" }}>
                   {issue.address}
                 </p>
@@ -304,7 +309,7 @@ function LeafletMapView({
                     color: getSeverityColor(issue.severity),
                   }}
                 >
-                  {issue.severity}
+                  {t(issue.severity) || issue.severity}
                 </span>
               </div>
             </Popup>
@@ -322,6 +327,7 @@ export default function MapPage({
   focusIssueId,
   className = "",
 }: Props) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -365,6 +371,11 @@ export default function MapPage({
 
   /* ─── Live user location via watchPosition ─── */
   const locateUser = () => {
+    if (userLocation) {
+      setCameraTarget({ ...userLocation, zoom: 15 });
+      return;
+    }
+
     if (!navigator.geolocation) {
       setLocationMessage("Location is not supported in this browser.");
       return;
@@ -529,7 +540,7 @@ export default function MapPage({
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search any address, landmark, city..."
+            placeholder={t("mapSearchPlaceholder") || "Search any address, landmark, city..."}
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             onKeyDown={(e) => {
@@ -605,7 +616,7 @@ export default function MapPage({
               </p>
             )}
             {filteredIssues.length === 0 && searchPlaces.length === 0 && !searchStatus && (
-              <p className="px-3 py-2 text-xs text-muted-foreground">Press Enter or tap 🔍 to search across India</p>
+              <p className="px-3 py-2 text-xs text-muted-foreground">{t("mapSearchHint") || "Press Enter or tap 🔍 to search across India"}</p>
             )}
           </div>
         )}
@@ -666,23 +677,23 @@ export default function MapPage({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
           <span className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-nagrik-blue" />
-            {userLocation ? `You${userAccuracy ? ` +/-${Math.round(userAccuracy)}m` : ""}` : "Location off"}
+            {userLocation ? `${t("you") || "You"}${userAccuracy ? ` +/-${Math.round(userAccuracy)}m` : ""}` : (t("locationOff") || "Location off")}
           </span>
           <span className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-red-500" />
-            High
+            {t("high") || "High"}
           </span>
           <span className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-orange-500" />
-            Medium
+            {t("medium") || "Medium"}
           </span>
           <span className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            Low
+            {t("low") || "Low"}
           </span>
         </div>
         {!userLocation && (
-          <p className="mt-1 max-w-44 text-[10px] text-muted-foreground">{locationMessage}</p>
+          <p className="mt-1 max-w-44 text-[10px] text-muted-foreground">{t(locationMessage) || locationMessage}</p>
         )}
       </div>
     </div>
