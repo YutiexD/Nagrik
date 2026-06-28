@@ -12,9 +12,13 @@ export async function POST(request: NextRequest) {
 
     const model = getGeminiModel();
 
+    const languageInstruction = lang.toLowerCase() === "english"
+      ? "in English."
+      : `in both English and ${lang} (formatted as: 'English version / ${lang} version', e.g., 'Broken Water Pipe / टूटी हुई पानी की पाइप') for the title, description, and root_cause.`;
+
     const systemPrompt = `You are Nagrik AI, an issue analysis engine for a civic platform.
 Analyze the reported issue and respond ONLY with valid JSON (no markdown fences).
-You MUST write all textual fields (specifically: the "title", "description", and "root_cause") in the following language: ${lang}.
+You MUST write all textual fields (specifically: the "title", "description", and "root_cause") ${languageInstruction}
 {
   "title": "short descriptive title",
   "category": "one of: road_damage, water, waste, lighting, drainage, noise, safety, other",

@@ -1,0 +1,154 @@
+{
+  "issues": [
+    {
+      "id": "mock-annrzf3zg",
+      "title": "Water leak in Sector 2",
+      "description": "Water leak in Sector 2",
+      "category": "other",
+      "severity": "medium",
+      "status": "reported",
+      "priority_score": 50,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-27T09:24:11.187Z",
+      "updated_at": "2026-06-27T09:24:11.187Z",
+      "root_cause": "Pending AI analysis",
+      "root_cause_confidence": 70,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782552251187",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-27T09:24:11.187Z"
+        }
+      ]
+    },
+    {
+      "id": "mock-qndgv7pxe",
+      "title": "Civic Issue Report",
+      "description": "Pothole on road",
+      "category": "other",
+      "severity": "medium",
+      "status": "reported",
+      "priority_score": 50,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-27T09:09:48.891Z",
+      "updated_at": "2026-06-27T09:09:48.891Z",
+      "root_cause": "Pending AI analysis",
+      "root_cause_confidence": 70,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782551388891",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-27T09:09:48.891Z"
+        }
+      ]
+    },
+    {
+      "id": "mock-22220hyji",
+      "title": "Civic Issue Report",
+      "description": "Pothole",
+      "category": "other",
+      "severity": "medium",
+      "status": "reported",
+      "priority_score": 50,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-27T09:06:07.194Z",
+      "updated_at": "2026-06-27T09:06:07.194Z",
+      "root_cause": "Pending AI analysis",
+      "root_cause_confidence": 70,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782551167194",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-27T09:06:07.194Z"
+        }
+      ]
+    },
+    {
+      "id": "mock-f7elsz61b",
+      "title": "सेक्टर 2 में पानी के मुख्य पाइपलाइन से रिसाव",
+      "description": "सेक्टर 2 में पानी की मुख्य पाइपलाइन से लगातार पानी का रिसाव हो रहा है। इससे बहुमूल्य पेयजल बर्बाद हो रहा है और सड़क पर जलभराव की स्थिति बन सकती है, जिससे आवागमन में परेशानी हो सकती है।",
+      "category": "water",
+      "severity": "high",
+      "status": "reported",
+      "priority_score": 85,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-27T08:59:06.742Z",
+      "updated_at": "2026-06-27T08:59:06.742Z",
+      "root_cause": "पाइपलाइन की उम्र पूरी होना, सामग्री की खराबी या बाहरी क्षति",
+      "root_cause_confidence": 85,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782550746742",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-27T08:59:06.742Z"
+        }
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "action": "reported",
+      "issue_title": "Water leak in Sector 2",
+      "timestamp": "2026-06-27T09:24:11.187Z",
+      "id": "act-4xu45srsa"
+    },
+    {
+      "action": "reported",
+      "issue_title": "Civic Issue Report",
+      "timestamp": "2026-06-27T09:09:48.891Z",
+      "id": "act-4uq5a5gzf"
+    },
+    {
+      "action": "reported",
+      "issue_title": "Civic Issue Report",
+      "timestamp": "2026-06-27T09:06:07.194Z",
+      "id": "act-25drqkuua"
+    },
+    {
+      "action": "marked resolved",
+      "issue_title": "Large Pothole near Main Crossing",
+      "timestamp": "2026-06-27T09:01:34.024Z",
+      "id": "act-jui7pfk1r"
+    },
+    {
+      "action": "verified",
+      "issue_title": "सेक्टर 2 में पानी के मुख्य पाइपलाइन से रिसाव",
+      "timestamp": "2026-06-27T08:59:48.860Z",
+      "id": "act-h2yhf4bdc"
+    },
+    {
+      "action": "reported",
+      "issue_title": "सेक्टर 2 में पानी के मुख्य पाइपलाइन से रिसाव",
+      "timestamp": "2026-06-27T08:59:06.742Z",
+      "id": "act-id2g4hhac"
+    }
+  ]
+}

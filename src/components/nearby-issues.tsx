@@ -13,6 +13,7 @@ interface Props {
   onSelectIssue: (issue: Issue) => void;
   onFocusMap: (issue: Issue) => void;
   onVerifyIssue: (issue: Issue, action: "still_exists" | "resolved") => void;
+  userLocation?: { lat: number; lng: number };
 }
 
 function getSeverityColor(severity: string) {
@@ -51,12 +52,29 @@ const severityGlows = {
   },
 };
 
-function getDistance(issueId: string) {
-  let hash = 0;
-  for (let i = 0; i < issueId.length; i++) {
-    hash = issueId.charCodeAt(i) + ((hash << 5) - hash);
+function getDistanceText(issue: Issue, userLoc?: { lat: number; lng: number }) {
+  if (!userLoc) {
+    let hash = 0;
+    for (let i = 0; i < issue.id.length; i++) {
+      hash = issue.id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return `${Math.abs(hash % 450 + 50)}m`;
   }
-  return Math.abs(hash % 450 + 50);
+
+  const lat1 = userLoc.lat;
+  const lon1 = userLoc.lng;
+  const lat2 = issue.latitude;
+  const lon2 = issue.longitude;
+
+  const R = 6371000; // radius of Earth in meters
+  const x = (lon2 - lon1) * Math.PI / 180 * Math.cos((lat1 + lat2) * Math.PI / 360);
+  const y = (lat2 - lat1) * Math.PI / 180;
+  const d = Math.sqrt(x * x + y * y) * R;
+
+  if (d < 1000) {
+    return `${Math.round(d)}m`;
+  }
+  return `${(d / 1000).toFixed(1)}km`;
 }
 
 /** Read the set of issue IDs the user has already voted on */
@@ -91,7 +109,7 @@ const localizedResponses: Record<string, string> = {
   pa: "ਪ੍ਰਤੀਕਰਮ ਦਰਜ ਕੀਤਾ ਗਿਆ! ਧੰਨਵਾਦ। 👍",
 };
 
-export default function NearbyIssues({ issues, onSelectIssue, onFocusMap, onVerifyIssue }: Props) {
+export default function NearbyIssues({ issues, onSelectIssue, onFocusMap, onVerifyIssue, userLocation }: Props) {
   const { t, language } = useTranslation();
   const [verifiedMap, setVerifiedMap] = useState<Record<string, "still_exists" | "resolved">>({});
   const [tempNotedMap, setTempNotedMap] = useState<Record<string, boolean>>({});
@@ -177,7 +195,7 @@ export default function NearbyIssues({ issues, onSelectIssue, onFocusMap, onVeri
                       </div>
 
                       <div className="flex items-center gap-2 mt-2 text-xs sm:text-sm text-muted-foreground font-medium">
-                        <span>📍 {getDistance(issue.id)}m away</span>
+                        <span>📍 {getDistanceText(issue, userLocation)} {t("away") || "away"}</span>
                         <span>•</span>
                         <span>👥 {issue.affected_citizens} {t("peopleAffected")}</span>
                       </div>

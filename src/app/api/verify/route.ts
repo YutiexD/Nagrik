@@ -1,10 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActivitySessionId } from "@/lib/activity-session";
 import type { NextRequest } from "next/server";
+import { addMockActivity } from "@/lib/mock-db-helper";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { issue_id, action } = await request.json();
+    const sessionId = await getActivitySessionId();
+    const { issue_id, issue_title, action } = await request.json();
 
     if (!issue_id || !action) {
       return Response.json(
@@ -22,6 +27,11 @@ export async function POST(request: NextRequest) {
 
     if (!supabase) {
       // Mock verification mode
+      addMockActivity({
+        action: action === "resolved" ? "marked resolved" : "verified",
+        issue_title: issue_title || "Civic Issue",
+        timestamp: new Date().toISOString(),
+      });
       return Response.json({
         verification_count: 5,
         confidence: 90,
@@ -33,16 +43,46 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    if (!UUID_RE.test(issue_id)) {
+      const { error: activityError } = await supabase.from("user_activities").insert({
+        user_id: user?.id ?? null,
+        session_id: sessionId,
+        issue_id: null,
+        issue_title: issue_title || "Civic issue",
+        action: action === "resolved" ? "marked resolved" : "verified",
+        metadata: { verification_action: action, source_issue_id: issue_id },
+      });
+
+      if (activityError) {
+        return Response.json({ error: activityError.message }, { status: 500 });
+      }
+
+      return Response.json({
+        verification_count: 1,
+        confidence: 90,
+        status: action === "resolved" ? "resolved" : "verified",
+      });
     }
 
-    const { error: verifyError } = await supabase
-      .from("verifications")
-      .upsert(
-        { issue_id, user_id: user.id, action },
-        { onConflict: "issue_id,user_id" }
-      );
+    const { data: issueForActivity } = await supabase
+      .from("issues")
+      .select("title")
+      .eq("id", issue_id)
+      .single();
+
+    const { error: verifyError } = user
+      ? await supabase
+          .from("verifications")
+          .upsert(
+            { issue_id, user_id: user.id, session_id: sessionId, action },
+            { onConflict: "issue_id,user_id" }
+          )
+      : await supabase
+          .from("verifications")
+          .upsert(
+            { issue_id, session_id: sessionId, action },
+            { onConflict: "issue_id,session_id" }
+          );
 
     if (verifyError) {
       return Response.json({ error: verifyError.message }, { status: 500 });
@@ -88,18 +128,32 @@ export async function POST(request: NextRequest) {
           : `Verified as still existing by citizen`,
     });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("issues_verified")
-      .eq("id", user.id)
-      .single();
+    await supabase.from("user_activities").insert({
+      user_id: user?.id ?? null,
+      session_id: sessionId,
+      issue_id,
+      issue_title: issueForActivity?.title || "Civic issue",
+      action: action === "resolved" ? "marked resolved" : "verified",
+      metadata: { verification_action: action },
+    });
 
-    const currentVerified = profile?.issues_verified || 0;
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("issues_verified, impact_score")
+        .eq("id", user.id)
+        .single();
 
-    await supabase
-      .from("profiles")
-      .update({ issues_verified: currentVerified + 1 })
-      .eq("id", user.id);
+      const currentVerified = profile?.issues_verified || 0;
+
+      await supabase
+        .from("profiles")
+        .update({
+          issues_verified: currentVerified + 1,
+          impact_score: (profile?.impact_score || 0) + 3,
+        })
+        .eq("id", user.id);
+    }
 
     return Response.json({
       verification_count: total,

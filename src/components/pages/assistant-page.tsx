@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, Loader2, X } from "lucide-react";
+import { Send, Sparkles, Loader2, X, Mic, MicOff } from "lucide-react";
 import { useTranslation } from "@/components/language-provider";
 import {
   mockPulse,
@@ -78,12 +78,73 @@ export default function AssistantPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageCounterRef = useRef(0);
+  const recognitionRef = useRef<any>(null);
 
   const nextMessageId = () => {
     messageCounterRef.current += 1;
     return `message-${messageCounterRef.current}`;
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+
+        const langCodes: Record<string, string> = {
+          en: "en-IN",
+          hi: "hi-IN",
+          bn: "bn-IN",
+          te: "te-IN",
+          mr: "mr-IN",
+          ta: "ta-IN",
+          gu: "gu-IN",
+          kn: "kn-IN",
+          ml: "ml-IN",
+          pa: "pa-IN",
+          ur: "ur-IN",
+        };
+        rec.lang = langCodes[language || "en"] || "en-IN";
+
+        rec.onstart = () => {
+          setIsListening(true);
+        };
+
+        rec.onresult = (event: any) => {
+          const text = event.results[0][0].transcript;
+          setInput((prev) => (prev ? prev + " " + text : text));
+        };
+
+        rec.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          setIsListening(false);
+        };
+
+        rec.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = rec;
+      }
+    }
+  }, [language]);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      recognitionRef.current.start();
+    }
   };
 
   useEffect(() => {
@@ -265,6 +326,17 @@ export default function AssistantPage({
             placeholder={t("askPlaceholder")}
             className="flex-1 px-4 py-3.5 rounded-2xl bg-muted/50 text-sm sm:text-base outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60"
           />
+          <button
+            onClick={toggleListening}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+              isListening
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-muted/70 text-muted-foreground hover:bg-muted"
+            }`}
+            title="Voice Search"
+          >
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
           <button
             onClick={() => handleSend(input)}
             disabled={!input.trim() || loading}

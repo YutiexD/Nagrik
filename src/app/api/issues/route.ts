@@ -1,19 +1,43 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActivitySessionId } from "@/lib/activity-session";
 import type { NextRequest } from "next/server";
+import { getMockDb, addMockIssue, addMockActivity } from "@/lib/mock-db-helper";
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    if (!supabase) {
-      // Return empty so the client uses mock data
-      return Response.json([]);
-    }
-
     const { searchParams } = request.nextUrl;
 
     const limit = parseInt(searchParams.get("limit") || "20");
     const category = searchParams.get("category");
     const status = searchParams.get("status");
+    const lat = Number(searchParams.get("lat"));
+    const lng = Number(searchParams.get("lng"));
+
+    if (!supabase) {
+      const db = getMockDb();
+      let issues = [...db.issues];
+      
+      if (category) issues = issues.filter(i => i.category === category);
+      if (status) issues = issues.filter(i => i.status === status);
+      
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const cosLat = Math.cos(lat * Math.PI / 180);
+        issues = issues.sort((a, b) => {
+          const dyA = a.latitude - lat;
+          const dxA = (a.longitude - lng) * cosLat;
+          const distA = dyA * dyA + dxA * dxA;
+
+          const dyB = b.latitude - lat;
+          const dxB = (b.longitude - lng) * cosLat;
+          const distB = dyB * dyB + dxB * dxB;
+
+          return distA - distB;
+        });
+      }
+      
+      return Response.json(issues.slice(0, limit));
+    }
 
     let query = supabase
       .from("issues")
@@ -30,10 +54,25 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    const issues = (data || []).map((issue) => ({
+    let issues = (data || []).map((issue) => ({
       ...issue,
       timeline: issue.timeline_events || [],
     }));
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const cosLat = Math.cos(lat * Math.PI / 180);
+      issues = issues.sort((a, b) => {
+        const dyA = a.latitude - lat;
+        const dxA = (a.longitude - lng) * cosLat;
+        const distA = dyA * dyA + dxA * dxA;
+
+        const dyB = b.latitude - lat;
+        const dxB = (b.longitude - lng) * cosLat;
+        const distB = dyB * dyB + dxB * dxB;
+
+        return distA - distB;
+      });
+    }
 
     return Response.json(issues);
   } catch (error) {
@@ -45,16 +84,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const sessionId = await getActivitySessionId();
     const body = await request.json();
 
     if (!supabase) {
-      // Offline/Mock mode submission success
-      return Response.json({
+      const newIssue = {
         id: "mock-" + Math.random().toString(36).slice(2, 11),
         title: body.title,
         description: body.description,
         category: body.category,
         severity: body.severity,
+        status: "reported",
         priority_score: body.priority_score || 50,
         confidence: 85,
         affected_citizens: 1,
@@ -75,21 +115,25 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
           },
         ],
-      }, { status: 201 });
+      };
+      addMockIssue(newIssue);
+      addMockActivity({
+        action: "reported",
+        issue_title: newIssue.title,
+        timestamp: newIssue.created_at,
+      });
+      return Response.json(newIssue, { status: 201 });
     }
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { data: issue, error } = await supabase
       .from("issues")
       .insert({
-        user_id: user.id,
+        user_id: user?.id ?? null,
+        reporter_session_id: sessionId,
         title: body.title,
         description: body.description,
         category: body.category,
@@ -111,22 +155,63 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    await supabase.from("timeline_events").insert({
+    const { error: timelineError } = await supabase.from("timeline_events").insert({
       issue_id: issue.id,
       type: "reported",
       description: "Issue first reported",
     });
 
-    await supabase
-      .from("profiles")
-      .update({
-        reports_created: user.user_metadata?.reports_created
-          ? user.user_metadata.reports_created + 1
-          : 1,
-      })
-      .eq("id", user.id);
+    if (timelineError) {
+      return Response.json({ error: timelineError.message }, { status: 500 });
+    }
 
-    return Response.json(issue, { status: 201 });
+    const { error: activityError } = await supabase.from("user_activities").insert({
+      user_id: user?.id ?? null,
+      session_id: sessionId,
+      issue_id: issue.id,
+      issue_title: issue.title,
+      action: "reported",
+      metadata: {
+        category: issue.category,
+        severity: issue.severity,
+        upload_type: body.upload_type || "report",
+      },
+    });
+
+    if (activityError) {
+      return Response.json({ error: activityError.message }, { status: 500 });
+    }
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("reports_created, impact_score")
+        .eq("id", user.id)
+        .single();
+
+      await supabase
+        .from("profiles")
+        .update({
+          reports_created: (profile?.reports_created || 0) + 1,
+          impact_score: (profile?.impact_score || 0) + 10,
+        })
+        .eq("id", user.id);
+    }
+
+    return Response.json(
+      {
+        ...issue,
+        timeline: [
+          {
+            id: `timeline-${issue.id}`,
+            type: "reported",
+            description: "Issue first reported",
+            timestamp: issue.created_at,
+          },
+        ],
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Issue creation error:", error);
     return Response.json({ error: "Failed to create issue" }, { status: 500 });

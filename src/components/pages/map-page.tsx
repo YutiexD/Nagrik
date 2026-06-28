@@ -31,6 +31,7 @@ interface Props {
   onSelectIssue: (issue: Issue) => void;
   focusIssueId?: string | null;
   className?: string;
+  onLocationUpdate?: (center: { lat: number; lng: number }) => void;
 }
 
 function getSeverityColor(s: string) {
@@ -326,6 +327,7 @@ export default function MapPage({
   onSelectIssue,
   focusIssueId,
   className = "",
+  onLocationUpdate,
 }: Props) {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -393,6 +395,9 @@ export default function MapPage({
         setLocationMessage(`Using your live browser location (+/-${Math.round(pos.coords.accuracy)}m).`);
         centeredOnFirstLocationRef.current = true;
         setCameraTarget({ ...next, zoom: 15 });
+        if (onLocationUpdate) {
+          onLocationUpdate(next);
+        }
       },
       (error) => {
         setLocationMessage(
@@ -421,6 +426,9 @@ export default function MapPage({
           centeredOnFirstLocationRef.current = true;
           setCameraTarget({ ...next, zoom: 15 });
         }
+        if (onLocationUpdate) {
+          onLocationUpdate(next);
+        }
       },
       (error) => {
         setLocationMessage(
@@ -433,7 +441,7 @@ export default function MapPage({
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [onLocationUpdate]);
 
   /* ─── Issue text filter ─── */
   const filteredIssues = useMemo(
@@ -594,6 +602,9 @@ export default function MapPage({
                 <button
                   onClick={() => {
                     setCameraTarget({ ...place.location, zoom: 15 });
+                    if (onLocationUpdate) {
+                      onLocationUpdate(place.location);
+                    }
                   }}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-primary"
                 >

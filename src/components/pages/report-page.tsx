@@ -25,7 +25,6 @@ interface Props {
   onAddIssue?: (issue: Issue) => void;
 }
 
-type InputMode = "image" | "video" | "record" | "audio_upload" | "text";
 type Step = "input" | "processing" | "review";
 type LocationMode = "gps" | "manual";
 
@@ -39,13 +38,12 @@ interface AnalysisResult {
   root_cause_confidence?: number;
 }
 
-const inputModes: { id: InputMode; icon: typeof Camera; label: string }[] = [
-  { id: "image", icon: Camera, label: "Image" },
-  { id: "video", icon: Video, label: "Video" },
-  { id: "record", icon: Mic, label: "Record" },
-  { id: "audio_upload", icon: Upload, label: "Audio" },
-  { id: "text", icon: FileText, label: "Text" },
-];
+type EvidenceKind = "image" | "video" | "audio";
+
+const waveformBars = Array.from({ length: 24 }, (_, i) => ({
+  height: 8 + ((i * 11) % 24),
+  duration: 0.4 + ((i % 5) * 0.08),
+}));
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -88,11 +86,15 @@ function formatLocationStatus(status: string, t: (key: string) => string, lang: 
 
 export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   const { t, currentLanguageInfo } = useTranslation();
-  const [mode, setMode] = useState<InputMode>("image");
   const [step, setStep] = useState<Step>("input");
   const [textInput, setTextInput] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [audioLabel, setAudioLabel] = useState("Voice evidence");
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<{
@@ -106,7 +108,9 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   const [manualLat, setManualLat] = useState("");
   const [manualLng, setManualLng] = useState("");
   const [locationStatus, setLocationStatus] = useState("Requesting location permission...");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -128,8 +132,10 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
         const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType });
         const ext = recorder.mimeType.includes('webm') ? 'webm' : 'm4a';
         const file = new File([blob], `recording.${ext}`, { type: recorder.mimeType });
-        setSelectedFile(file);
-        setPreview(URL.createObjectURL(blob));
+        if (audioPreview) URL.revokeObjectURL(audioPreview);
+        setAudioFile(file);
+        setAudioPreview(URL.createObjectURL(blob));
+        setAudioLabel("Recorded voice note");
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -330,12 +336,53 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
     return null;
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (kind: EvidenceKind, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSelectedFile(file);
     const url = URL.createObjectURL(file);
-    setPreview(url);
+
+    if (kind === "image") {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      setImageFile(file);
+      setImagePreview(url);
+      return;
+    }
+
+    if (kind === "video") {
+      if (videoPreview) URL.revokeObjectURL(videoPreview);
+      setVideoFile(file);
+      setVideoPreview(url);
+      return;
+    }
+
+    if (audioPreview) URL.revokeObjectURL(audioPreview);
+    setAudioFile(file);
+    setAudioPreview(url);
+    setAudioLabel(file.name || "Uploaded audio");
+  };
+
+  const clearEvidence = (kind: EvidenceKind) => {
+    if (kind === "image") {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      setImageFile(null);
+      setImagePreview(null);
+      if (imageRef.current) imageRef.current.value = "";
+      return;
+    }
+
+    if (kind === "video") {
+      if (videoPreview) URL.revokeObjectURL(videoPreview);
+      setVideoFile(null);
+      setVideoPreview(null);
+      if (videoRef.current) videoRef.current.value = "";
+      return;
+    }
+
+    if (audioPreview) URL.revokeObjectURL(audioPreview);
+    setAudioFile(null);
+    setAudioPreview(null);
+    setAudioLabel("Voice evidence");
+    if (audioRef.current) audioRef.current.value = "";
   };
 
   const handleSubmit = async () => {
@@ -353,18 +400,19 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
         payload.address = location.address;
       }
 
-      if (selectedFile) {
-        const base64 = await fileToBase64(selectedFile);
-        if (mode === "image") {
-          payload.imageBase64 = base64;
-          payload.imageType = selectedFile.type;
-        } else if (mode === "video") {
-          payload.videoBase64 = base64;
-          payload.videoType = selectedFile.type;
-        } else if (mode === "record" || mode === "audio_upload") {
-          payload.audioBase64 = base64;
-          payload.audioType = selectedFile.type;
-        }
+      if (imageFile) {
+        payload.imageBase64 = await fileToBase64(imageFile);
+        payload.imageType = imageFile.type;
+      }
+
+      if (videoFile) {
+        payload.videoBase64 = await fileToBase64(videoFile);
+        payload.videoType = videoFile.type;
+      }
+
+      if (audioFile) {
+        payload.audioBase64 = await fileToBase64(audioFile);
+        payload.audioType = audioFile.type;
       }
 
       if (textInput) {
@@ -389,11 +437,14 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
       setAnalysis(result);
       setStep("review");
     } catch {
+      const fallbackTitle = textInput.trim()
+        ? (textInput.length > 60 ? textInput.slice(0, 57) + "..." : textInput)
+        : "Civic Issue Report";
       setAnalysis({
-        title: "Civic Issue Report",
+        title: fallbackTitle,
         category: "other",
         severity: "medium",
-        description: textInput || "Issue reported via Nagrik app.",
+        description: textInput || "Issue reported with uploaded evidence via Nagrik app.",
         priority_score: 50,
       });
       setStep("review");
@@ -405,7 +456,6 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
     const reportLocation = await getReportLocation();
     if (!reportLocation) return;
 
-    let newIssue: Issue | null = null;
     try {
       const res = await fetch("/api/issues", {
         method: "POST",
@@ -415,64 +465,38 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
           latitude: reportLocation.lat,
           longitude: reportLocation.lng,
           address: reportLocation.address,
+          upload_type: [
+            textInput.trim() ? "text" : null,
+            imageFile ? "image" : null,
+            videoFile ? "video" : null,
+            audioFile ? "audio" : null,
+          ].filter(Boolean).join(",") || "report",
         }),
       });
-      if (res.ok) {
-        newIssue = await res.json();
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Report could not be saved to the database.");
       }
+
+      const newIssue: Issue = await res.json();
+
+      if (onAddIssue) {
+        onAddIssue(newIssue);
+      }
+
+      setStep("input");
+      setTextInput("");
+      clearEvidence("image");
+      clearEvidence("video");
+      clearEvidence("audio");
+      setAnalysis(null);
+      setManualAddress("");
+      setManualLat("");
+      setManualLng("");
+      onNavigate("home");
     } catch (err) {
-      console.warn("API submission failed, falling back to local creation:", err);
+      setError(err instanceof Error ? err.message : "Report could not be saved to the database.");
     }
-
-    if (!newIssue) {
-      newIssue = {
-        id: "mock-" + Math.random().toString(36).slice(2, 11),
-        title: analysis.title,
-        description: analysis.description,
-        category: (analysis.category || "other") as any,
-        severity: (analysis.severity || "medium") as any,
-        status: "reported",
-        priority_score: analysis.priority_score || 50,
-        confidence: 85,
-        affected_citizens: 1,
-        verification_count: 0,
-        latitude: reportLocation.lat,
-        longitude: reportLocation.lng,
-        address: reportLocation.address,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        root_cause: analysis.root_cause || "Pending AI analysis",
-        root_cause_confidence: analysis.root_cause_confidence || 70,
-        timeline: [
-          {
-            id: `t-mock-${Date.now()}`,
-            type: "reported",
-            description: "Issue first reported by citizen",
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-    }
-
-    if (onAddIssue) {
-      onAddIssue(newIssue);
-    }
-
-    setStep("input");
-    setTextInput("");
-    setSelectedFile(null);
-    setPreview(null);
-    setAnalysis(null);
-    setManualAddress("");
-    setManualLat("");
-    setManualLng("");
-    onNavigate("home");
-  };
-
-  const clearFile = () => {
-    setSelectedFile(null);
-    setPreview(null);
-    if (fileRef.current) fileRef.current.value = "";
   };
 
   const severityColor: Record<string, string> = {
@@ -504,170 +528,144 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
               exit={{ opacity: 0, y: -8 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-5 gap-2">
-                {inputModes.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      if (isRecording) stopRecording();
-                      setMode(m.id);
-                      clearFile();
-                    }}
-                    className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl transition-all cursor-pointer border ${
-                      mode === m.id
-                        ? "bg-primary/20 text-primary border-primary/40 shadow-sm"
-                        : "bg-muted hover:bg-muted/90 text-muted-foreground border-transparent"
-                    }`}
-                  >
-                    <m.icon className="w-5 h-5" />
-                    <span className="text-xs font-semibold">{t(m.id) || m.label}</span>
-                  </button>
-                ))}
-              </div>
-
               <input
-                ref={fileRef}
+                ref={imageRef}
                 type="file"
                 className="hidden"
-                accept={
-                  mode === "image"
-                    ? "image/*"
-                    : mode === "video"
-                    ? "video/*"
-                    : mode === "audio_upload"
-                    ? "audio/*"
-                    : undefined
-                }
-                capture={mode === "image" ? "environment" : undefined}
-                onChange={handleFileSelect}
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handleFileSelect("image", e)}
+              />
+              <input
+                ref={videoRef}
+                type="file"
+                className="hidden"
+                accept="video/*"
+                onChange={(e) => handleFileSelect("video", e)}
+              />
+              <input
+                ref={audioRef}
+                type="file"
+                className="hidden"
+                accept="audio/*"
+                onChange={(e) => handleFileSelect("audio", e)}
               />
 
-              {mode === "image" && !preview && (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
-                >
-                  <Camera className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-base text-muted-foreground font-semibold">
-                    {t("tapToTakePhotoOrUpload")}
-                  </p>
-                </button>
-              )}
-
-              {mode === "video" && !preview && (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
-                >
-                  <Video className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-base text-muted-foreground font-semibold">
-                    {t("recordOrUploadShortVideo")}
-                  </p>
-                </button>
-              )}
-
-              {mode === "record" && !preview && (
-                <div className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-4">
-                  {isRecording ? (
-                    <>
-                      <motion.div
-                        animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
-                        transition={{ duration: 1.2, repeat: Infinity }}
-                        className="w-20 h-20 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center"
-                      >
-                        <div className="w-4 h-4 rounded-sm bg-red-500 animate-pulse" />
-                      </motion.div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-sm font-mono font-semibold text-red-400">
-                          {Math.floor(recordingSeconds / 60).toString().padStart(2, '0')}:{(recordingSeconds % 60).toString().padStart(2, '0')}
-                        </span>
-                      </div>
-                      {/* Waveform bars */}
-                      <div className="flex items-end gap-0.5 h-8">
-                        {Array.from({ length: 24 }).map((_, i) => (
-                          <motion.div
-                            key={i}
-                            className="w-1 rounded-full bg-red-400/70"
-                            animate={{ height: [4, 8 + Math.random() * 24, 4] }}
-                            transition={{ duration: 0.4 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.05 }}
-                          />
-                        ))}
-                      </div>
-                      <button
-                        onClick={stopRecording}
-                        className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/10 text-red-400 font-semibold text-sm border border-red-500/20 cursor-pointer"
-                      >
-                        <Square className="w-4 h-4" />
-                        {t("stopRecording")}
-                      </button>
-                    </>
-                  ) : (
-                    <button onClick={startRecording} className="flex flex-col items-center gap-3 cursor-pointer">
-                      <motion.div
-                        animate={{ scale: [1, 1.08, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center"
-                      >
-                        <Mic className="w-9 h-9 text-primary" />
-                      </motion.div>
-                      <p className="text-base text-muted-foreground font-semibold">{t("tapToStartRecording")}</p>
-                    </button>
-                  )}
+              <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="text-sm font-bold">Describe what happened</span>
                 </div>
-              )}
-
-              {mode === "audio_upload" && !preview && (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="w-full rounded-2xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 cursor-pointer"
-                >
-                  <Upload className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="text-base text-muted-foreground font-semibold">
-                    {t("uploadExistingAudioFile")}
-                  </p>
-                </button>
-              )}
-
-              {mode === "text" && (
                 <textarea
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder={t("describeIssue")}
-                  className="w-full h-36 rounded-2xl bg-muted/30 border border-border p-4 text-base resize-none outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60"
+                  className="w-full h-36 rounded-xl bg-muted/30 border border-border p-4 text-base resize-none outline-none focus:ring-2 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/60"
                 />
-              )}
+              </div>
 
-              {preview && (
-                <div className="relative rounded-2xl overflow-hidden border border-border">
-                  {mode === "image" && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={preview}
-                      alt="Preview"
-                      className="w-full h-48 object-cover"
-                    />
-                  )}
-                  {mode === "video" && (
-                    <video
-                      src={preview}
-                      controls
-                      className="w-full h-48 object-cover"
-                    />
-                  )}
-                  {(mode === "record" || mode === "audio_upload") && (
-                    <div className="p-4">
-                      <audio src={preview} controls className="w-full" />
-                    </div>
-                  )}
+              <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <button
-                    onClick={clearFile}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center cursor-pointer"
+                    onClick={() => imageRef.current?.click()}
+                    className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-4 text-center transition-colors hover:bg-muted/60 cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5 text-white" />
+                    <Camera className="h-6 w-6 text-primary" />
+                    <span className="text-xs font-bold">Add photo</span>
+                  </button>
+                  <button
+                    onClick={() => videoRef.current?.click()}
+                    className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-4 text-center transition-colors hover:bg-muted/60 cursor-pointer"
+                  >
+                    <Video className="h-6 w-6 text-primary" />
+                    <span className="text-xs font-bold">Add video</span>
+                  </button>
+                  <button
+                    onClick={() => audioRef.current?.click()}
+                    className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-4 text-center transition-colors hover:bg-muted/60 cursor-pointer"
+                  >
+                    <Upload className="h-6 w-6 text-primary" />
+                    <span className="text-xs font-bold">Upload audio</span>
+                  </button>
+                  <button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border px-3 py-4 text-center transition-colors cursor-pointer ${
+                      isRecording
+                        ? "border-red-500/40 bg-red-500/10 text-red-400"
+                        : "border-border bg-muted/30 hover:bg-muted/60"
+                    }`}
+                  >
+                    {isRecording ? <Square className="h-6 w-6" /> : <Mic className="h-6 w-6 text-primary" />}
+                    <span className="text-xs font-bold">
+                      {isRecording
+                        ? `${Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:${(recordingSeconds % 60).toString().padStart(2, "0")}`
+                        : "Record voice"}
+                    </span>
                   </button>
                 </div>
-              )}
+
+                {isRecording && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-400">
+                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                      Listening
+                    </div>
+                    <div className="flex h-8 items-end gap-0.5">
+                      {waveformBars.map((bar, i) => (
+                        <motion.div
+                          key={i}
+                          className="w-1 rounded-full bg-red-400/70"
+                          animate={{ height: [4, bar.height, 4] }}
+                          transition={{ duration: bar.duration, repeat: Infinity, delay: i * 0.05 }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(imagePreview || videoPreview || audioPreview) && (
+                  <div className="grid gap-3">
+                    {imagePreview && (
+                      <div className="relative overflow-hidden rounded-xl border border-border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imagePreview} alt="Photo evidence preview" className="h-48 w-full object-cover" />
+                        <button
+                          onClick={() => clearEvidence("image")}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 cursor-pointer"
+                          aria-label="Remove photo"
+                        >
+                          <X className="h-3.5 w-3.5 text-white" />
+                        </button>
+                      </div>
+                    )}
+                    {videoPreview && (
+                      <div className="relative overflow-hidden rounded-xl border border-border">
+                        <video src={videoPreview} controls className="h-48 w-full object-cover" />
+                        <button
+                          onClick={() => clearEvidence("video")}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 cursor-pointer"
+                          aria-label="Remove video"
+                        >
+                          <X className="h-3.5 w-3.5 text-white" />
+                        </button>
+                      </div>
+                    )}
+                    {audioPreview && (
+                      <div className="relative rounded-xl border border-border bg-muted/30 p-4 pr-12">
+                        <p className="mb-2 text-xs font-semibold text-muted-foreground">{audioLabel}</p>
+                        <audio src={audioPreview} controls className="w-full" />
+                        <button
+                          onClick={() => clearEvidence("audio")}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 cursor-pointer"
+                          aria-label="Remove audio"
+                        >
+                          <X className="h-3.5 w-3.5 text-white" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-4">
                 <div className="flex items-center gap-3">
@@ -786,7 +784,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
 
               <button
                 onClick={handleSubmit}
-                disabled={mode === "text" && !textInput.trim() && !selectedFile}
+                disabled={!textInput.trim() && !imageFile && !videoFile && !audioFile}
                 className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-nagrik-blue text-primary-foreground font-bold text-base shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-40 cursor-pointer hover:brightness-110"
               >
                 <Sparkles className="w-5 h-5" />
@@ -899,6 +897,12 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                     : location?.address || "GPS location pending"}
                 </p>
               </div>
+
+              {error && (
+                <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+                  {error}
+                </p>
+              )}
 
               <button
                 onClick={handleFinalSubmit}

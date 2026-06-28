@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Home, Plus, User } from "lucide-react";
+import { Bot, Home, Loader2, MapPin, Navigation, Plus, User } from "lucide-react";
 import HomePage from "@/components/pages/home-page";
 import ReportPage from "@/components/pages/report-page";
 import AssistantPage from "@/components/pages/assistant-page";
@@ -25,21 +25,69 @@ const topTabs: { id: Tab; labelKey: string; icon: typeof Home }[] = [
 // Default fallback location — Bengaluru
 const DEFAULT_LOC = { lat: 12.9716, lng: 77.5946 };
 const DEFAULT_CITY = "Bengaluru";
+const LOCATION_DECISION_KEY = "nagrik_location_decision_v1";
+const LOCATION_DATA_KEY = "nagrik_center_location";
+const CITY_DATA_KEY = "nagrik_city_name";
+
+type LocationDecision = "pending" | "ready";
+
+function LocationGate({
+  onAllow,
+  onSkip,
+  loading,
+}: {
+  onAllow: () => void;
+  onSkip: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="min-h-dvh w-full bg-[#0a0a0f] text-foreground flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/85 p-6 text-center shadow-2xl">
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-xl bg-primary/10 text-primary">
+          <MapPin className="h-7 w-7" />
+        </div>
+        <h1 className="text-2xl font-bold">Use your location?</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Nagrik uses your location to show nearby civic reports first. If you skip, we will use sample city data.
+        </p>
+        <div className="mt-6 grid gap-3">
+          <button
+            onClick={onAllow}
+            disabled={loading}
+            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+            Allow location
+          </button>
+          <button
+            onClick={onSkip}
+            disabled={loading}
+            className="h-12 rounded-xl border border-border bg-muted/40 px-4 text-sm font-bold text-muted-foreground hover:bg-muted/70"
+          >
+            Continue with sample data
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const { language, setLanguage, t, currentLanguageInfo } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-
-  // Seed default issues immediately so the app is never empty
-  const [issues, setIssues] = useState<Issue[]>(() => {
+  const [locationDecision, setLocationDecision] = useState<LocationDecision>("pending");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [centerLocation, setCenterLocation] = useState<{ lat: number; lng: number }>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nagrik_seeded_issues");
+      const saved = localStorage.getItem("nagrik_center_location");
       if (saved) return JSON.parse(saved);
     }
-    return generateSeededIssues(DEFAULT_LOC.lat, DEFAULT_LOC.lng, DEFAULT_CITY);
+    return DEFAULT_LOC;
   });
+
+  const [issues, setIssues] = useState<Issue[]>([]);
 
   const [pulse, setPulse] = useState<CommunityPulse>(() => {
     if (typeof window !== "undefined") {
@@ -73,7 +121,8 @@ export default function App() {
     return mockInsights;
   });
 
-  const locationUpgraded = useRef(false);
+  const initializedLocation = useRef(false);
+  const locationUpgraded = useRef(true);
 
   // Helper to fetch/analyze pulse data via Gemini
   const analyzeAndStorePulse = useCallback(async (issueList: Issue[], langName?: string) => {
@@ -109,6 +158,118 @@ export default function App() {
     }
   }, [currentLanguageInfo]);
 
+  const loadAreaData = useCallback(async (center: { lat: number; lng: number }, city: string) => {
+    const seededIssues = generateSeededIssues(center.lat, center.lng, city);
+    let nextIssues = seededIssues;
+
+    try {
+      const res = await fetch(`/api/issues?limit=50&lat=${center.lat}&lng=${center.lng}`, { cache: "no-store" });
+      if (res.ok) {
+        const dbIssues: Issue[] = await res.json();
+        
+        // Filter out database issues that are far away (>50km / ~0.5 degrees distance)
+        const nearbyDbIssues = dbIssues.filter(issue => {
+          const dist = Math.abs(issue.latitude - center.lat) + Math.abs(issue.longitude - center.lng);
+          return dist < 0.5;
+        });
+
+        const seen = new Set<string>();
+        nextIssues = [...nearbyDbIssues, ...seededIssues].filter((issue) => {
+          if (seen.has(issue.id)) return false;
+          seen.add(issue.id);
+          return true;
+        });
+      }
+    } catch (err) {
+      console.warn("Could not load database issues, using nearby sample data:", err);
+    }
+
+    // Sort all issues by distance to center coordinates
+    const cosLat = Math.cos(center.lat * Math.PI / 180);
+    nextIssues = nextIssues.sort((a, b) => {
+      const dyA = a.latitude - center.lat;
+      const dxA = (a.longitude - center.lng) * cosLat;
+      const distA = dyA * dyA + dxA * dxA;
+
+      const dyB = b.latitude - center.lat;
+      const dxB = (b.longitude - center.lng) * cosLat;
+      const distB = dyB * dyB + dxB * dxB;
+
+      return distA - distB;
+    });
+
+    setIssues(nextIssues);
+    setCenterLocation(center);
+    localStorage.setItem("nagrik_seeded_issues", JSON.stringify(nextIssues));
+    localStorage.setItem(LOCATION_DATA_KEY, JSON.stringify(center));
+    localStorage.setItem(CITY_DATA_KEY, city);
+    localStorage.setItem(LOCATION_DECISION_KEY, "ready");
+    setLocationDecision("ready");
+    void analyzeAndStorePulse(nextIssues);
+  }, [analyzeAndStorePulse]);
+
+  const useFallbackLocation = useCallback(() => {
+    setLocationLoading(false);
+    void loadAreaData(DEFAULT_LOC, DEFAULT_CITY);
+  }, [loadAreaData]);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      useFallbackLocation();
+      return;
+    }
+
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const center = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        let city = DEFAULT_CITY;
+        try {
+          const res = await fetch(`/api/places?q=${center.lat},${center.lng}&reverse=1`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.results?.[0]) {
+              city = data.results[0].name || data.results[0].address?.split(",")[0] || city;
+            }
+          }
+        } catch {
+          // Keep default city name while using detected coordinates.
+        }
+
+        await loadAreaData(center, city);
+        setLocationLoading(false);
+      },
+      () => {
+        useFallbackLocation();
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  }, [loadAreaData, useFallbackLocation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !language || initializedLocation.current) return;
+    initializedLocation.current = true;
+
+    if (localStorage.getItem(LOCATION_DECISION_KEY) !== "ready") return;
+
+    const savedIssues = localStorage.getItem("nagrik_seeded_issues");
+    if (savedIssues) {
+      setIssues(JSON.parse(savedIssues));
+      setLocationDecision("ready");
+      return;
+    }
+
+    const savedLoc = localStorage.getItem(LOCATION_DATA_KEY);
+    const savedCity = localStorage.getItem(CITY_DATA_KEY) || DEFAULT_CITY;
+    if (savedLoc) {
+      void loadAreaData(JSON.parse(savedLoc), savedCity);
+    }
+  }, [language, loadAreaData]);
+
   // On mount: save default issues if first time, then try upgrading to real location in background
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -137,54 +298,6 @@ export default function App() {
       // Kick off pulse analysis in the background
       void analyzeAndStorePulse(issues);
     }
-
-    // Now try to upgrade to user's real location in the background
-    if (!locationUpgraded.current && navigator.geolocation) {
-      locationUpgraded.current = true;
-
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          // Check if we already have data for this location (within ~500m)
-          const savedLoc = localStorage.getItem("nagrik_center_location");
-          if (savedLoc) {
-            const prev = JSON.parse(savedLoc);
-            const dist = Math.abs(prev.lat - lat) + Math.abs(prev.lng - lng);
-            if (dist < 0.005) return; // Already seeded for this location
-          }
-
-          // Get city name via reverse geocoding
-          let city = DEFAULT_CITY;
-          try {
-            const res = await fetch(`/api/places?q=${lat},${lng}&reverse=1`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.results?.[0]) {
-                city = data.results[0].name || data.results[0].address?.split(",")[0] || city;
-              }
-            }
-          } catch { /* keep default */ }
-
-          // Generate new location-specific issues and swap them in
-          const newIssues = generateSeededIssues(lat, lng, city);
-          setIssues(newIssues);
-          localStorage.setItem("nagrik_seeded_issues", JSON.stringify(newIssues));
-          localStorage.setItem("nagrik_center_location", JSON.stringify({ lat, lng }));
-          localStorage.setItem("nagrik_city_name", city);
-
-          // Re-analyze in background
-          void analyzeAndStorePulse(newIssues);
-        },
-        () => {
-          // Denied or failed — stay on default, no action needed
-          console.info("Location denied, staying on default seed data.");
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -192,12 +305,25 @@ export default function App() {
   // Callback when user adds a report
   const handleAddIssue = useCallback((newIssue: Issue) => {
     setIssues((current) => {
-      const next = [newIssue, ...current];
+      let next = [newIssue, ...current];
+      // Sort all issues by distance to center coordinates
+      const cosLat = Math.cos(centerLocation.lat * Math.PI / 180);
+      next = next.sort((a, b) => {
+        const dyA = a.latitude - centerLocation.lat;
+        const dxA = (a.longitude - centerLocation.lng) * cosLat;
+        const distA = dyA * dyA + dxA * dxA;
+
+        const dyB = b.latitude - centerLocation.lat;
+        const dxB = (b.longitude - centerLocation.lng) * cosLat;
+        const distB = dyB * dyB + dxB * dxB;
+
+        return distA - distB;
+      });
       localStorage.setItem("nagrik_seeded_issues", JSON.stringify(next));
       void analyzeAndStorePulse(next);
       return next;
     });
-  }, [analyzeAndStorePulse]);
+  }, [analyzeAndStorePulse, centerLocation]);
 
   // Callback when user verifies an issue
   const verifySelectedIssue = async (
@@ -240,12 +366,32 @@ export default function App() {
       await fetch("/api/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ issue_id: issue.id, action }),
+        body: JSON.stringify({ issue_id: issue.id, issue_title: issue.title, action }),
       });
     } catch (err) {
       console.warn("Verification saved locally only:", err);
     }
   };
+
+  const handleMapLocationUpdate = useCallback(async (center: { lat: number; lng: number }) => {
+    const dist = Math.abs(center.lat - centerLocation.lat) + Math.abs(center.lng - centerLocation.lng);
+    if (dist < 0.0005) return;
+
+    let city = DEFAULT_CITY;
+    try {
+      const res = await fetch(`/api/places?q=${center.lat},${center.lng}&reverse=1`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results?.[0]) {
+          city = data.results[0].name || data.results[0].address?.split(",")[0] || city;
+        }
+      }
+    } catch {
+      // Keep default
+    }
+
+    void loadAreaData(center, city);
+  }, [centerLocation, loadAreaData]);
 
   // Trigger pulse analysis ONLY when the issues list count changes
   useEffect(() => {
@@ -261,6 +407,16 @@ export default function App() {
 
   if (language === null) {
     return <ChooseLanguageCard onSelectLanguage={setLanguage} />;
+  }
+
+  if (locationDecision === "pending") {
+    return (
+      <LocationGate
+        onAllow={requestLocation}
+        onSkip={useFallbackLocation}
+        loading={locationLoading}
+      />
+    );
   }
 
   return (
@@ -324,6 +480,8 @@ export default function App() {
                 insights={insights}
                 onUpdateIssues={setIssues}
                 onVerifyIssue={verifySelectedIssue}
+                userLocation={centerLocation}
+                onLocationUpdate={handleMapLocationUpdate}
               />
             </motion.div>
           )}

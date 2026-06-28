@@ -31,6 +31,8 @@ interface HomePageProps {
   insights: PredictiveInsight[];
   onUpdateIssues?: React.Dispatch<React.SetStateAction<Issue[]>>;
   onVerifyIssue?: (issue: Issue, action: "still_exists" | "resolved") => void;
+  userLocation?: { lat: number; lng: number };
+  onLocationUpdate?: (center: { lat: number; lng: number }) => void;
 }
 
 const stagger = {
@@ -60,6 +62,8 @@ export default function HomePage({
   mood,
   insights,
   onVerifyIssue,
+  userLocation,
+  onLocationUpdate,
 }: HomePageProps) {
   const { t } = useTranslation();
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
@@ -116,6 +120,7 @@ export default function HomePage({
             issues={issues}
             onSelectIssue={onSelectIssue}
             focusIssueId={focusedIssueId}
+            onLocationUpdate={onLocationUpdate}
           />
         </motion.div>
 
@@ -126,6 +131,7 @@ export default function HomePage({
             onSelectIssue={onSelectIssue}
             onFocusMap={focusMapIssue}
             onVerifyIssue={handleVerify}
+            userLocation={userLocation}
           />
         </motion.div>
 

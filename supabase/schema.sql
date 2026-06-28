@@ -55,6 +55,7 @@ create trigger on_auth_user_created
 create table public.issues (
   id uuid not null default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id) on delete set null,
+  reporter_session_id text,
   title text not null,
   description text not null default '',
   category text not null default 'other',
@@ -83,8 +84,15 @@ create policy "Issues are viewable by everyone"
 create policy "Authenticated users can create issues"
   on public.issues for insert with check (auth.role() = 'authenticated');
 
+create policy "Demo visitors can create issues"
+  on public.issues for insert with check (auth.role() = 'anon' and user_id is null and reporter_session_id is not null);
+
 create policy "Users can update own issues"
   on public.issues for update using (auth.uid() = user_id);
+
+create policy "Demo visitors can update verification fields"
+  on public.issues for update using (auth.role() = 'anon')
+  with check (auth.role() = 'anon');
 
 -- ============================================================
 -- TIMELINE EVENTS
@@ -105,16 +113,22 @@ create policy "Timeline events are viewable by everyone"
 create policy "Authenticated users can create timeline events"
   on public.timeline_events for insert with check (auth.role() = 'authenticated');
 
+create policy "Demo visitors can create timeline events"
+  on public.timeline_events for insert with check (auth.role() = 'anon');
+
 -- ============================================================
 -- VERIFICATIONS
 -- ============================================================
 create table public.verifications (
   id uuid not null default uuid_generate_v4() primary key,
   issue_id uuid references public.issues(id) on delete cascade not null,
-  user_id uuid references public.profiles(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade,
+  session_id text,
   action text not null check (action in ('still_exists', 'resolved')),
   created_at timestamptz not null default now(),
-  unique (issue_id, user_id)
+  unique (issue_id, user_id),
+  unique (issue_id, session_id),
+  check (user_id is not null or session_id is not null)
 );
 
 alter table public.verifications enable row level security;
@@ -123,10 +137,43 @@ create policy "Verifications are viewable by everyone"
   on public.verifications for select using (true);
 
 create policy "Authenticated users can verify"
-  on public.verifications for insert with check (auth.role() = 'authenticated');
+  on public.verifications for insert with check (
+    (auth.role() = 'authenticated' and auth.uid() = user_id)
+    or
+    (auth.role() = 'anon' and user_id is null and session_id is not null)
+  );
 
 create policy "Users can update own verification"
-  on public.verifications for update using (auth.uid() = user_id);
+  on public.verifications for update using (
+    auth.uid() = user_id or (auth.role() = 'anon' and user_id is null and session_id is not null)
+  );
+
+-- ============================================================
+-- USER ACTIVITIES
+-- ============================================================
+create table public.user_activities (
+  id uuid not null default uuid_generate_v4() primary key,
+  user_id uuid references public.profiles(id) on delete cascade,
+  session_id text,
+  issue_id uuid references public.issues(id) on delete cascade,
+  issue_title text not null default '',
+  action text not null check (action in ('reported', 'verified', 'marked resolved')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  check (user_id is not null or session_id is not null)
+);
+
+alter table public.user_activities enable row level security;
+
+create policy "Activities are viewable by everyone"
+  on public.user_activities for select using (true);
+
+create policy "Authenticated users can create activities"
+  on public.user_activities for insert with check (
+    (auth.role() = 'authenticated' and auth.uid() = user_id)
+    or
+    (auth.role() = 'anon' and user_id is null and session_id is not null)
+  );
 
 -- ============================================================
 -- FLASH ALERTS
@@ -152,8 +199,12 @@ create index idx_issues_location on public.issues (latitude, longitude);
 create index idx_issues_status on public.issues (status);
 create index idx_issues_category on public.issues (category);
 create index idx_issues_created_at on public.issues (created_at desc);
+create index idx_issues_reporter_session on public.issues (reporter_session_id);
 create index idx_verifications_issue on public.verifications (issue_id);
+create index idx_verifications_session on public.verifications (session_id);
 create index idx_timeline_issue on public.timeline_events (issue_id);
+create index idx_user_activities_user on public.user_activities (user_id, created_at desc);
+create index idx_user_activities_session on public.user_activities (session_id, created_at desc);
 
 -- ============================================================
 -- REALTIME
@@ -161,3 +212,4 @@ create index idx_timeline_issue on public.timeline_events (issue_id);
 alter publication supabase_realtime add table public.issues;
 alter publication supabase_realtime add table public.verifications;
 alter publication supabase_realtime add table public.flash_alerts;
+alter publication supabase_realtime add table public.user_activities;
