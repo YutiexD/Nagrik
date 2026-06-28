@@ -31,9 +31,15 @@ Nagrik is a mobile-first web application that bridges the gap between citizens a
 - **Auto-resolution** — Issues automatically marked resolved when verification threshold met
 - **Timeline tracking** — Full event history from report through verification to resolution
 
-### AI Assistant
-- **"Ask Your Area"** — Conversational AI that answers local civic questions using real issue data
+### AI Assistant & Analysis Resiliency
+- **"Ask Your Area"** — Conversational AI that answers local civic questions using real issue data without hallucinations or refusals
 - **Context-aware** — Injects community pulse, issue counts, and category data into prompts
+- **Robust API Retry** — Implemented exponential backoff for all Gemini API routes (pulse and assistant) to handle high-demand 503 spikes gracefully
+- **Dynamic Local Fallback** — In case of complete AI failure, calculates category pulse scores and emergency alerts locally from actual issue dataset
+
+### Multilingual Support
+- **Extensive Translations** — Support for major Indian languages including Hindi, Bengali, Telugu, Marathi, Tamil, Urdu, Gujarati, Kannada, Odia, Malayalam, Punjabi, etc.
+- **Bilingual AI Outputs** — Assistant and Pulse generate narratives in both English and the user's selected local language.
 
 ### City Pulse Dashboard
 - **Community pulse scores** — Per-category health scores (roads, water, waste, lighting, drainage, safety)

@@ -115,6 +115,12 @@
   ],
   "activities": [
     {
+      "action": "marked resolved",
+      "issue_title": "Dangling High Voltage Cable",
+      "timestamp": "2026-06-28T08:48:18.292Z",
+      "id": "act-88qopnto3"
+    },
+    {
       "action": "reported",
       "issue_title": "Water leak in Sector 2",
       "timestamp": "2026-06-27T09:24:11.187Z",
