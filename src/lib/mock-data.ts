@@ -521,7 +521,7 @@ export const mockIssues: Issue[] = [
 
 export const mockProfile: UserProfile = {
   id: "u1",
-  name: "Arjun Mehta",
+  name: "Utsav",
   impact_score: 847,
   reports_created: 23,
   issues_verified: 67,

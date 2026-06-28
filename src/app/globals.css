@@ -130,9 +130,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    line-height: 1.6;
   }
   html {
     @apply font-sans;
+    font-size: 17.5px;
   }
 }
 
@@ -243,8 +245,10 @@ input, textarea, select {
 
 /* Ensure all cards with bg-card have a beautiful frosted glass blur effect */
 .bg-card {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.35);
+  border-width: 1.5px;
 }
 
 

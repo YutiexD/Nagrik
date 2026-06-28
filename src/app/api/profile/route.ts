@@ -71,7 +71,7 @@ export async function GET() {
     return Response.json({
       profile: {
         id: user?.id || sessionId,
-        name: storedProfile?.name || user?.user_metadata?.full_name || "Demo Citizen",
+        name: storedProfile?.name || user?.user_metadata?.full_name || "Utsav",
         avatar_url: storedProfile?.avatar_url,
         impact_score: storedProfile?.impact_score || reportsCreated * 10 + issuesVerified * 3,
         reports_created: reportsCreated,
@@ -94,7 +94,7 @@ export async function GET() {
       {
         profile: {
           ...mockProfile,
-          name: "Demo Citizen",
+          name: "Utsav",
           recent_activity: [],
         },
         uploaded_issues: [],
