@@ -8,6 +8,7 @@ import ReportPage from "@/components/pages/report-page";
 import AssistantPage from "@/components/pages/assistant-page";
 import ProfilePage from "@/components/pages/profile-page";
 import IssueDetailSheet from "@/components/issue-detail-sheet";
+import { NavBar } from "@/components/ui/tubelight-navbar";
 import type { Issue, IssueStatus, TimelineEvent, CommunityPulse, FlashAlert, CityMood, PredictiveInsight } from "@/lib/types";
 import { generateSeededIssues } from "@/lib/demo-seeder";
 import { mockPulse, mockAlerts, mockCityMood, mockInsights } from "@/lib/mock-data";
@@ -434,26 +435,17 @@ export default function App() {
             <span className="hidden text-base font-bold sm:inline">Nagrik</span>
           </button>
 
-          <div className="ml-auto flex items-center gap-1">
-            {topTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors sm:px-3 ${
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t(tab.labelKey)}</span>
-                </button>
-              );
-            })}
+          <div className="ml-auto">
+            <NavBar
+              items={topTabs.map((tab) => ({
+                id: tab.id,
+                name: t(tab.labelKey),
+                icon: tab.icon,
+              }))}
+              activeTab={activeTab}
+              onTabChange={(id) => setActiveTab(id)}
+              className="relative bottom-auto sm:top-auto left-auto -translate-x-0"
+            />
           </div>
         </div>
       </header>
