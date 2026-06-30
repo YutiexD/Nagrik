@@ -55,9 +55,9 @@ export default function ChooseLanguageCard({ onSelectLanguage }: ChooseLanguageC
         className="w-full max-w-2xl bg-card/80 backdrop-blur-xl border border-border/60 rounded-2xl p-5 sm:p-7 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
       >
         <div className="text-center mb-5 flex-shrink-0">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-nagrik-blue text-white font-black text-xl mb-4 shadow-lg shadow-primary/20">
-            N
-          </div>
+          <span className="inline-block text-4xl font-black tracking-tight text-white bg-gradient-to-r from-primary via-cyan-400 to-nagrik-blue bg-clip-text text-transparent animate-gradient mb-4">
+            Nagrik
+          </span>
           <h1 className="text-2xl font-bold tracking-tight">Choose Language</h1>
           <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
             Select one language before opening Nagrik. The app will continue in that language.

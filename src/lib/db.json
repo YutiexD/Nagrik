@@ -1,6 +1,62 @@
 {
   "issues": [
     {
+      "id": "mock-oabxd7o5r",
+      "title": "Leaking Tap on Street Corner / सड़क के कोने पर टपकता नल",
+      "description": "A tap at the street corner is continuously leaking, leading to significant water wastage. This ongoing leak could also create a slippery surface for pedestrians and accumulate stagnant water. / सड़क के कोने पर एक नल लगातार टपक रहा है, जिससे पानी की भारी बर्बादी हो रही है। इस लगातार रिसाव से पैदल चलने वालों के लिए फिसलन भरी सतह भी बन सकती है और स्थिर पानी जमा हो सकता है।",
+      "category": "water",
+      "severity": "medium",
+      "status": "reported",
+      "priority_score": 65,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-28T18:09:32.489Z",
+      "updated_at": "2026-06-28T18:09:32.489Z",
+      "root_cause": "Likely a worn-out washer, a damaged valve, or loose fittings due to age and frequent public use. / संभवतः घिसा हुआ वॉशर, क्षतिग्रस्त वाल्व, या उम्र और लगातार सार्वजनिक उपयोग के कारण ढीले फिटिंग।",
+      "root_cause_confidence": 85,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782670172489",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-28T18:09:32.489Z"
+        }
+      ]
+    },
+    {
+      "id": "mock-80dd6q77t",
+      "title": "Water Leak and Waste / पानी का रिसाव और बर्बादी",
+      "description": "A significant water leak has been reported in Sector 2, Jodhpur, leading to the continuous wastage of clean drinking water. This issue not only depletes essential resources but could also impact local water supply and increase costs. / जोधपुर के सेक्टर 2 में पानी के एक बड़े रिसाव की सूचना मिली है, जिससे साफ पीने के पानी की लगातार बर्बादी हो रही है। यह समस्या न केवल आवश्यक संसाधनों को कम करती है, बल्कि स्थानीय जल आपूर्ति को भी प्रभावित कर सकती है और लागत बढ़ा सकती है।",
+      "category": "water",
+      "severity": "high",
+      "status": "reported",
+      "priority_score": 85,
+      "confidence": 85,
+      "affected_citizens": 1,
+      "verification_count": 0,
+      "latitude": 26.2648,
+      "longitude": 73.0289,
+      "address": "Jodhpur, Jodhpur Tehsil, Jodhpur, Rajasthan, 112001, India",
+      "created_at": "2026-06-28T17:36:00.903Z",
+      "updated_at": "2026-06-28T17:36:00.903Z",
+      "root_cause": "Aging or damaged water pipeline infrastructure. / पुरानी या क्षतिग्रस्त पानी की पाइपलाइन अवसंरचना।",
+      "root_cause_confidence": 90,
+      "similar_cases": 0,
+      "timeline": [
+        {
+          "id": "t-mock-1782668160903",
+          "type": "reported",
+          "description": "Issue first reported by citizen",
+          "timestamp": "2026-06-28T17:36:00.903Z"
+        }
+      ]
+    },
+    {
       "id": "mock-annrzf3zg",
       "title": "Water leak in Sector 2",
       "description": "Water leak in Sector 2",
@@ -114,6 +170,18 @@
     }
   ],
   "activities": [
+    {
+      "action": "reported",
+      "issue_title": "Leaking Tap on Street Corner / सड़क के कोने पर टपकता नल",
+      "timestamp": "2026-06-28T18:09:32.489Z",
+      "id": "act-sn7ue82nv"
+    },
+    {
+      "action": "reported",
+      "issue_title": "Water Leak and Waste / पानी का रिसाव और बर्बादी",
+      "timestamp": "2026-06-28T17:36:00.903Z",
+      "id": "act-yy9jotkom"
+    },
     {
       "action": "marked resolved",
       "issue_title": "Dangling High Voltage Cable",

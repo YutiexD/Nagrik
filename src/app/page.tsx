@@ -426,13 +426,12 @@ export default function App() {
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 rounded-2xl border border-border/50 bg-[#07070c]/80 backdrop-blur-xl px-4 py-1.5 shadow-lg shadow-black/20">
           <button
             onClick={() => setActiveTab("home")}
-            className="flex min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-muted/60"
+            className="flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-1 hover:bg-muted/60 transition-colors"
             aria-label="Go to home"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-nagrik-blue text-sm font-bold text-white">
-              N
+            <span className="text-2xl font-black tracking-tight text-white bg-gradient-to-r from-primary via-cyan-400 to-nagrik-blue bg-clip-text text-transparent animate-gradient">
+              Nagrik
             </span>
-            <span className="hidden text-base font-bold sm:inline">Nagrik</span>
           </button>
 
           <div className="ml-auto">
@@ -508,7 +507,7 @@ export default function App() {
 
       <button
         onClick={() => setChatOpen((open) => !open)}
-        className="fixed bottom-6 right-6 z-[1010] flex items-center gap-2 px-5 py-3.5 rounded-full bg-gradient-to-r from-primary to-nagrik-blue text-white shadow-2xl shadow-primary/35 hover:shadow-primary/45 transition-all hover:scale-[1.04] active:scale-[0.97] cursor-pointer border border-primary/20"
+        className="fixed bottom-6 right-6 z-[1010] flex items-center gap-2 px-5 py-3.5 rounded-full bg-gradient-to-r from-primary to-nagrik-blue text-white shadow-2xl shadow-primary/35 hover:shadow-primary/45 transition-all hover:scale-[1.04] active:scale-[0.97] cursor-pointer border border-primary/20 animate-pulse-glow"
         aria-label="Open AI chat"
       >
         <Bot className="h-5 w-5 animate-pulse text-white" />

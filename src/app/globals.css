@@ -251,4 +251,55 @@ input, textarea, select {
   border-width: 1.5px;
 }
 
+/* Animated Gradient for branding */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% auto;
+  animation: gradient-shift 6s ease infinite;
+}
+
+/* Pulse Glow Animation for AI buttons and important CTAs */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 12px 40px -12px rgba(16, 185, 129, 0.25), 0 0 0 0px rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 12px 40px -12px rgba(16, 185, 129, 0.45), 0 0 20px 6px rgba(16, 185, 129, 0.3);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s infinite ease-in-out;
+}
+
+/* Floating micro-interactions for badges and status markers */
+@keyframes micro-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.animate-micro-float {
+  animation: micro-float 2.5s infinite ease-in-out;
+}
+
+/* Smooth Interactive Elements Transitions */
+a, button, input, select, textarea {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hover lift and glow response for cards */
+.hover-card-lift {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
 
