@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, Loader2, X, Mic, MicOff } from "lucide-react";
+import { Send, Sparkles, Loader2, X, Mic, Square, Volume2 } from "lucide-react";
 import { useTranslation } from "@/components/language-provider";
 import {
   mockPulse,
@@ -46,7 +46,7 @@ const localizedSuggestions: Record<string, string[]> = {
     "কোনটি সবচেয়ে দ্রুত সমাধান হয়?",
   ],
   te: [
-    "చెత్త समस्याలు ఎందుకు పెరుగుతున్నాయి?",
+    "చెత్త సమస్యలు ఎందుకు పెరుగుతున్నాయి?",
     "ఏ ప్రాంతంలో ఎక్కువ ఫిర్యాదులు ఉన్నాయి?",
     "నా చుట్టూ ఏం జరుగుతోంది?",
     "ఏది వేగంగా పరిష్కరించబడుతుంది?",
@@ -78,72 +78,151 @@ export default function AssistantPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messageCounterRef = useRef(0);
-  const recognitionRef = useRef<any>(null);
+
+  // Sarvam voice recording state
+  const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+
+  // TTS playback state
+  const [playingTtsId, setPlayingTtsId] = useState<string | null>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const nextMessageId = () => {
     messageCounterRef.current += 1;
     return `message-${messageCounterRef.current}`;
   };
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const rec = new SpeechRecognition();
-        rec.continuous = false;
-        rec.interimResults = false;
+  // Start recording via MediaRecorder → Sarvam STT
+  const startListening = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "audio/mp4";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordingChunksRef.current = [];
 
-        const langCodes: Record<string, string> = {
-          en: "en-IN",
-          hi: "hi-IN",
-          bn: "bn-IN",
-          te: "te-IN",
-          mr: "mr-IN",
-          ta: "ta-IN",
-          gu: "gu-IN",
-          kn: "kn-IN",
-          ml: "ml-IN",
-          pa: "pa-IN",
-          ur: "ur-IN",
-        };
-        rec.lang = langCodes[language || "en"] || "en-IN";
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunksRef.current.push(e.data);
+      };
 
-        rec.onstart = () => {
-          setIsListening(true);
-        };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordingChunksRef.current, { type: mimeType });
 
-        rec.onresult = (event: any) => {
-          const text = event.results[0][0].transcript;
-          setInput((prev) => (prev ? prev + " " + text : text));
-        };
+        // Send to Sarvam STT
+        setIsTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append("file", blob, "voice.webm");
+          form.append("language_code", language || "unknown");
+          const res = await fetch("/api/sarvam/speech-to-text", {
+            method: "POST",
+            body: form,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.transcript) {
+              setInput((prev) => (prev ? prev + " " + data.transcript : data.transcript));
+            }
+          }
+        } catch (err) {
+          console.warn("Sarvam STT failed:", err);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
 
-        rec.onerror = (event: any) => {
-          console.error("Speech recognition error", event.error);
-          setIsListening(false);
-        };
-
-        rec.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current = rec;
-      }
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsListening(true);
+    } catch {
+      alert(t("microphoneDenied") || "Microphone access denied.");
     }
-  }, [language]);
+  }, [language, t]);
+
+  const stopListening = useCallback(() => {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+    setIsListening(false);
+  }, []);
 
   const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in this browser.");
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== "inactive"
+      ) {
+        mediaRecorderRef.current.stop();
+      }
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+      }
+    };
+  }, []);
+
+  // TTS: Play AI response aloud via Sarvam
+  const playTts = async (messageId: string, text: string) => {
+    // Stop any currently playing audio
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+
+    if (playingTtsId === messageId) {
+      setPlayingTtsId(null);
       return;
     }
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      recognitionRef.current.start();
+
+    setPlayingTtsId(messageId);
+    try {
+      const res = await fetch("/api/sarvam/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text.slice(0, 2400), // bulbul:v3 max 2500 chars
+          language: language || "en",
+        }),
+      });
+
+      if (!res.ok) throw new Error("TTS failed");
+
+      const { audioBase64 } = await res.json();
+      if (!audioBase64) throw new Error("No audio data");
+
+      const audioBlob = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
+      const blob = new Blob([audioBlob], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+
+      audio.onended = () => {
+        setPlayingTtsId(null);
+        URL.revokeObjectURL(url);
+        ttsAudioRef.current = null;
+      };
+
+      audio.play();
+    } catch (err) {
+      console.warn("TTS playback failed:", err);
+      setPlayingTtsId(null);
     }
   };
 
@@ -201,19 +280,7 @@ export default function AssistantPage({
         },
       ]);
     } catch {
-      const fallbacks: Record<string, string> = {
-        "Why are garbage issues increasing?":
-          "Garbage complaints have risen 25% this week, primarily in Sectors 3 and 7. The pattern correlates with the recent festival period — historically, waste generation spikes 2-3 days after major events.",
-        "Which area has most complaints?":
-          "Sector 5 currently leads with 34 active issues, primarily water-related. Sector 7 follows with 22 issues, mostly waste management.",
-        "What is happening around me?":
-          "Within 500m: 3 active issues. A pothole 120m away (92% confidence, 42 affected). A streetlight out 340m north. A blocked drain 480m east verified by 14 citizens.",
-        "What gets resolved fastest?":
-          "Streetlight issues resolve fastest at 2.3 days average. Road damage takes the longest at 8.7 days. Issues with 30+ affected citizens resolve 60% faster.",
-      };
-
       const fallback =
-        fallbacks[text.trim()] ||
         "Based on community data, the overall Community Pulse is 84. Roads are performing well at 91 but water infrastructure is at 68. I recommend monitoring water-related issues in your sector.";
 
       setMessages((prev) => [
@@ -292,13 +359,29 @@ export default function AssistantPage({
             }`}
           >
             <div
-              className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm sm:text-base leading-relaxed shadow-sm border ${
+              className={`max-w-[85%] rounded-2xl text-sm sm:text-base leading-relaxed shadow-sm border ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-tr-md border-transparent"
-                  : "bg-card border-border/60 rounded-tl-md"
+                  ? "bg-primary text-primary-foreground rounded-tr-md border-transparent px-4 py-3"
+                  : "bg-card border-border/60 rounded-tl-md px-4 py-3"
               }`}
             >
-              {msg.content}
+              <div>{msg.content}</div>
+              {msg.role === "assistant" && (
+                <button
+                  onClick={() => playTts(msg.id, msg.content)}
+                  className={`mt-2 flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    playingTtsId === msg.id
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-primary"
+                  }`}
+                  title={t("listenAloud") || "Listen aloud"}
+                >
+                  <Volume2 className={`h-3.5 w-3.5 ${playingTtsId === msg.id ? "animate-pulse" : ""}`} />
+                  {playingTtsId === msg.id
+                    ? (t("playing") || "Playing...")
+                    : (t("listenAloud") || "Listen")}
+                </button>
+              )}
             </div>
           </motion.div>
         ))}
@@ -317,6 +400,12 @@ export default function AssistantPage({
       </div>
 
       <div className="flex-shrink-0 border-t border-border/50 p-4 glass-strong">
+        {isTranscribing && (
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-primary">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {t("transcribingVoice") || "Transcribing with Sarvam AI..."}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -328,14 +417,15 @@ export default function AssistantPage({
           />
           <button
             onClick={toggleListening}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+            disabled={isTranscribing}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 ${
               isListening
                 ? "bg-red-500 text-white animate-pulse"
                 : "bg-muted/70 text-muted-foreground hover:bg-muted"
             }`}
-            title="Voice Search"
+            title={t("voiceSearch") || "Voice Search"}
           >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {isListening ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
           <button
             onClick={() => handleSend(input)}
@@ -349,3 +439,4 @@ export default function AssistantPage({
     </div>
   );
 }
+

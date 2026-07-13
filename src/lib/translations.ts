@@ -339,7 +339,18 @@ export const translations: Record<string, Record<string, string>> = {
     "markedResolved": "Marked Resolved",
     "Community Guardian": "Community Guardian",
     "language": "Language",
-    "change": "Change"
+    "change": "Change",
+    "listening": "Listening",
+    "transcribingVoice": "Transcribing your voice with Sarvam AI...",
+    "voiceTranscript": "Voice Transcript",
+    "recordedVoiceNote": "Recorded voice note",
+    "microphoneDenied": "Microphone access denied. Please allow microphone permission.",
+    "listenAloud": "Listen",
+    "playing": "Playing...",
+    "voiceSearch": "Voice Search",
+    "speakInAnyLanguage": "Speak in any Indian language",
+    "poweredBySarvam": "Powered by Sarvam AI",
+    "askAI": "Ask AI 💬"
   },
   "hi": {
     "chooseLanguage": "भाषा चुनें",
@@ -613,7 +624,18 @@ export const translations: Record<string, Record<string, string>> = {
     "Noise complaint verified near Market Square": "मार्केट स्क्वायर के पास शोर की शिकायत सत्यापित",
     "Two new streetlight reports added in Sector 8": "सेक्टर 8 में दो नई स्ट्रीटलाइट रिपोर्ट जोड़ी गईं",
     "language": "भाषा",
-    "change": "बदलें"
+    "change": "बदलें",
+    "listening": "सुन रहा है",
+    "transcribingVoice": "सर्वम AI से आपकी आवाज़ लिखी जा रही है...",
+    "voiceTranscript": "आवाज़ का प्रतिलिपि",
+    "recordedVoiceNote": "रिकॉर्ड की गई आवाज",
+    "microphoneDenied": "माइक्रोफ़ोन अनुमति अस्वीकार। कृपया माइक्रोफ़ोन अनुमति दें।",
+    "listenAloud": "सुनें",
+    "playing": "चल रहा है...",
+    "voiceSearch": "आवाज़ से खोजें",
+    "speakInAnyLanguage": "किसी भी भारतीय भाषा में बोलें",
+    "poweredBySarvam": "सर्वम AI द्वारा संचालित",
+    "askAI": "AI से पूछें 💬"
   },
   "bn": {
     "chooseLanguage": "ভাষা নির্বাচন করুন",

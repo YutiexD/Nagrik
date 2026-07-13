@@ -19,6 +19,7 @@ import {
 import type { Tab } from "@/app/page";
 import type { Issue } from "@/lib/types";
 import { useTranslation } from "@/components/language-provider";
+import { Languages } from "lucide-react";
 
 interface Props {
   onNavigate: (tab: Tab) => void;
@@ -115,19 +116,24 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const { language } = useTranslation();
+
   const startRecording = async () => {
     try {
+      setVoiceTranscript(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
       recordingChunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordingChunksRef.current.push(e.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType });
         const ext = recorder.mimeType.includes('webm') ? 'webm' : 'm4a';
@@ -135,7 +141,31 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
         if (audioPreview) URL.revokeObjectURL(audioPreview);
         setAudioFile(file);
         setAudioPreview(URL.createObjectURL(blob));
-        setAudioLabel("Recorded voice note");
+        setAudioLabel(t("recordedVoiceNote") || "Recorded voice note");
+
+        // --- Sarvam AI Speech-to-Text ---
+        setIsTranscribing(true);
+        try {
+          const sttForm = new FormData();
+          sttForm.append("file", blob, `recording.${ext}`);
+          sttForm.append("language_code", language || "unknown");
+          const sttRes = await fetch("/api/sarvam/speech-to-text", {
+            method: "POST",
+            body: sttForm,
+          });
+          if (sttRes.ok) {
+            const sttData = await sttRes.json();
+            if (sttData.transcript) {
+              setVoiceTranscript(sttData.transcript);
+              // Pre-fill the text input with the transcript
+              setTextInput((prev) => prev ? prev + " " + sttData.transcript : sttData.transcript);
+            }
+          }
+        } catch (err) {
+          console.warn("Sarvam STT failed, audio still attached as evidence:", err);
+        } finally {
+          setIsTranscribing(false);
+        }
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -143,7 +173,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
       setRecordingSeconds(0);
       recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
     } catch {
-      setError("Microphone access denied. Please allow microphone permission.");
+      setError(t("microphoneDenied") || "Microphone access denied. Please allow microphone permission.");
     }
   };
 
@@ -608,7 +638,7 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                   <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
                     <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-400">
                       <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                      Listening
+                      {t("listening") || "Listening"}
                     </div>
                     <div className="flex h-8 items-end gap-0.5">
                       {waveformBars.map((bar, i) => (
@@ -620,6 +650,25 @@ export default function ReportPage({ onNavigate, onAddIssue }: Props) {
                         />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {isTranscribing && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-semibold text-primary">
+                      {t("transcribingVoice") || "Transcribing your voice with Sarvam AI..."}
+                    </span>
+                  </div>
+                )}
+
+                {voiceTranscript && !isRecording && !isTranscribing && (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                    <div className="mb-1.5 flex items-center gap-2 text-xs font-bold text-emerald-400">
+                      <Languages className="h-3.5 w-3.5" />
+                      {t("voiceTranscript") || "Voice Transcript"}
+                    </div>
+                    <p className="text-sm text-foreground/90 leading-relaxed">{voiceTranscript}</p>
                   </div>
                 )}
 
